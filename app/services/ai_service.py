@@ -158,10 +158,138 @@ Include:
 4. Reminder: Update Naukri profile
 5. Streak counter based on daily_logs
 6. Today's company deep-dive preview
+7. Follow-ups due today (with names & companies)
+8. Keyword gaps from recent JD analysis and how to address them
+9. Networking targets for today's deep-dive company, including 3 LinkedIn search suggestions
+10. A short connection message template tailored to today's deep-dive company
 
 Keep it concise. Use bullet points. Under 800 words."""
 
     return await call_claude(prompt, max_tokens=1500)
+
+
+async def analyze_jd_patterns(jd_texts: list[str], resume_keywords: list[str]) -> dict | None:
+    prompt = f"""Analyze these {len(jd_texts)} job descriptions that scored 7+ fit.
+
+JOB DESCRIPTIONS:
+{chr(10).join([f"--- JD {i+1} ---{chr(10)}{jd[:2000]}" for i, jd in enumerate(jd_texts)])}
+
+CANDIDATE'S CURRENT RESUME KEYWORDS:
+{', '.join(resume_keywords)}
+
+Return ONLY valid JSON:
+{{
+  "top_keywords": [
+    {{"keyword": "cross-functional leadership", "frequency": 6, "in_jds": [1,2,3,4,5,6]}}
+  ],
+  "candidate_covers": ["keywords from resume_keywords that appear in JDs"],
+  "gaps": ["keywords frequent in JDs but MISSING from resume_keywords"],
+  "gap_recommendations": [
+    "Add 'cohort analysis' to Mylo bullet — you did RFM segmentation there",
+    "Add 'marketplace dynamics' to summary — relevant from Pocket FM content marketplace"
+  ],
+  "coverage_score": 85
+}}
+
+Rank keywords by frequency. Include ALL keywords appearing in 3+ JDs."""
+
+    result = await call_claude(prompt, max_tokens=3000)
+    return parse_json_response(result)
+
+
+async def generate_interview_prep(
+    company_name: str,
+    role_title: str,
+    jd_text: str,
+    company_intel: str,
+    profile: dict[str, Any],
+) -> str | None:
+    prompt = f"""Generate a comprehensive interview preparation document.
+
+COMPANY: {company_name}
+ROLE: {role_title}
+
+JD:
+{jd_text[:3000]}
+
+COMPANY INTEL:
+{company_intel[:2000] if company_intel else 'No prior research available'}
+
+CANDIDATE PROFILE:
+- Name: {profile.get('full_name', 'N/A')}
+- Positioning: {profile.get('positioning_statement', 'N/A')}
+- Core Skills: {', '.join(profile.get('core_skills', []))}
+- Key Achievements: {json.dumps(profile.get('achievements', {}), indent=2)[:1500]}
+
+Generate:
+
+## 1. Company Context (3-4 sentences)
+Why this company, what stage, what challenges
+
+## 2. Why This Role Exists
+What problem they're solving by hiring
+
+## 3. Top 5 Interview Questions + Your STAR Answers
+Use SPECIFIC examples from the candidate's experience.
+Format: Q → Situation → Task → Action → Result
+
+## 4. 90-Day Plan
+First 30 days / 60 days / 90 days framework
+
+## 5. Smart Questions To Ask Them
+3 questions that show research and strategic thinking
+
+## 6. Key Numbers To Have Ready
+From candidate's experience that are relevant to this role
+
+## 7. Gaps To Manage
+Where your experience doesn't match JD + how to address it
+
+Be specific. Use real numbers. No generic filler."""
+
+    return await call_claude(prompt, max_tokens=4000)
+
+
+async def generate_market_intel(company_names: list[str]) -> str | None:
+    prompt = f"""You are a market intelligence analyst for a job seeker targeting 
+B2C consumer tech companies in Bangalore, India.
+
+TARGET COMPANIES: {', '.join(company_names)}
+
+For each company, research and provide:
+- Recent news (last 2 weeks): funding, product launches, partnerships
+- Leadership changes: new hires, departures at CXO/VP level
+- Hiring signals: are they actively posting growth/marketing roles?
+- Any layoffs or hiring freezes?
+
+Also include:
+- NEW B2C consumer tech companies in Bangalore that recently raised Series A/B/C
+- Companies recently posting Head of Growth / VP Growth / Director Growth roles
+
+Format as a readable digest. Be specific with names and dates.
+Mark each company as 🟢 (actively hiring), 🟡 (stable), or 🔴 (freezing/laying off)."""
+
+    return await call_claude(prompt, max_tokens=4000)
+
+
+async def generate_content_topics(profile: dict[str, Any]) -> list[dict[str, str]] | None:
+    prompt = f"""Generate 7 LinkedIn post topics for this profile.
+
+PROFILE:
+{json.dumps(profile, indent=2)}
+
+Return ONLY valid JSON:
+{{
+  "topics": [
+    {{"topic": "...", "category": "Growth|GenAI|Strategy|Industry|Personal"}}
+  ]
+}}"""
+
+    result = await call_claude(prompt, max_tokens=1000)
+    data = parse_json_response(result)
+    if not data:
+        return None
+    return data.get("topics")
 
 
 async def generate_midday_check(data: dict[str, Any]) -> str | None:

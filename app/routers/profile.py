@@ -43,7 +43,7 @@ async def get_profile(
     return ProfileOut.model_validate(profile)
 
 
-@router.put("/", response_model=ProfileOut)
+@router.put("", response_model=ProfileOut)
 async def update_profile(
     payload: ProfileUpdate,
     db: AsyncSession = Depends(get_db),

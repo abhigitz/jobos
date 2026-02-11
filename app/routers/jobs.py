@@ -18,11 +18,6 @@ from app.services.ai_service import analyze_jd
 router = APIRouter()
 
 
-def _paginate(query, page: int, per_page: int):
-    offset = (page - 1) * per_page
-    return query.limit(per_page).offset(offset)
-
-
 @router.get("", response_model=PaginatedResponse)
 async def list_jobs(
     db: AsyncSession = Depends(get_db),
@@ -34,23 +29,26 @@ async def list_jobs(
     source_portal: str | None = None,
     sort: str = Query("-created_at"),
 ):
-    query = select(Job).where(Job.user_id == current_user.id, Job.is_deleted.is_(False))
+    base_query = select(Job).where(Job.user_id == current_user.id, Job.is_deleted.is_(False))
     if status:
-        query = query.where(Job.status == status)
+        base_query = base_query.where(Job.status == status)
     if company_name:
-        query = query.where(Job.company_name.ilike(f"%{company_name}%"))
+        base_query = base_query.where(Job.company_name.ilike(f"%{company_name}%"))
     if source_portal:
-        query = query.where(Job.source_portal == source_portal)
-
+        base_query = base_query.where(Job.source_portal == source_portal)
     if sort.startswith("-"):
         field = getattr(Job, sort[1:], Job.created_at)
-        query = query.order_by(field.desc())
+        items_query = base_query.order_by(field.desc())
     else:
         field = getattr(Job, sort, Job.created_at)
-        query = query.order_by(field.asc())
+        items_query = base_query.order_by(field.asc())
 
-    total = (await db.execute(query.with_only_columns(func.count()))).scalar_one()
-    items = (await db.execute(_paginate(query, page, per_page))).scalars().all()
+    # Simple total count with no GROUP BY / ORDER BY complications
+    count_query = select(func.count()).select_from(base_query.subquery())
+    total = (await db.execute(count_query)).scalar_one()
+
+    offset = (page - 1) * per_page if per_page else 0
+    items = (await db.execute(items_query.limit(per_page).offset(offset))).scalars().all()
     pages = (total + per_page - 1) // per_page if per_page else 1
     return PaginatedResponse(items=[JobOut.model_validate(i) for i in items], total=total, page=page, per_page=per_page, pages=pages)
 

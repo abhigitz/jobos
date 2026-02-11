@@ -17,8 +17,9 @@ async def lifespan(app: FastAPI):
 
     settings = get_settings()
     if settings.telegram_bot_token and settings.app_url:
-        await register_webhook(settings.app_url, settings.telegram_webhook_secret)
-        logger.info("Telegram webhook registered")
+        webhook_url = f"{settings.app_url}/api/telegram/webhook"
+        await register_webhook(webhook_url, settings.telegram_webhook_secret)
+        logger.info(f"Telegram webhook registered: {webhook_url}")
     yield
 
 

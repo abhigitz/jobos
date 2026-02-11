@@ -209,3 +209,23 @@ async def telegram_webhook(
 
     await send_telegram_message(chat_id, "Unknown command. Use /help.")
     return {"ok": True}
+
+
+@router.post("/register-webhook")
+async def manual_register_webhook():
+    """Manually trigger webhook registration with Telegram API."""
+    from app.services.telegram_service import register_webhook
+    
+    if not settings.telegram_bot_token:
+        raise HTTPException(status_code=400, detail="TELEGRAM_BOT_TOKEN not configured")
+    
+    if not settings.app_url:
+        raise HTTPException(status_code=400, detail="APP_URL not configured")
+    
+    webhook_url = f"{settings.app_url}/api/telegram/webhook"
+    success = await register_webhook(webhook_url, settings.telegram_webhook_secret)
+    
+    if success:
+        return {"status": "success", "webhook_url": webhook_url}
+    else:
+        raise HTTPException(status_code=500, detail="Failed to register webhook with Telegram")

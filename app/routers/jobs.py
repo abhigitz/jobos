@@ -101,43 +101,6 @@ async def create_job(
     return JobOut.model_validate(job)
 
 
-@router.get("/{job_id}", response_model=JobOut)
-async def get_job(job_id: str, db: AsyncSession = Depends(get_db), current_user=Depends(get_current_user)) -> JobOut:
-    job = await db.get(Job, job_id)
-    if job is None or job.user_id != current_user.id or job.is_deleted:
-        raise HTTPException(status_code=404, detail="Job not found")
-    return JobOut.model_validate(job)
-
-
-@router.patch("/{job_id}", response_model=JobOut)
-async def update_job(
-    job_id: str,
-    payload: JobUpdate,
-    db: AsyncSession = Depends(get_db),
-    current_user=Depends(get_current_user),
-) -> JobOut:
-    job = await db.get(Job, job_id)
-    if job is None or job.user_id != current_user.id or job.is_deleted:
-        raise HTTPException(status_code=404, detail="Job not found")
-
-    for field, value in payload.model_dump(exclude_unset=True).items():
-        setattr(job, field, value)
-
-    await db.commit()
-    await db.refresh(job)
-    return JobOut.model_validate(job)
-
-
-@router.delete("/{job_id}")
-async def delete_job(job_id: str, db: AsyncSession = Depends(get_db), current_user=Depends(get_current_user)) -> dict:
-    job = await db.get(Job, job_id)
-    if job is None or job.user_id != current_user.id or job.is_deleted:
-        raise HTTPException(status_code=404, detail="Job not found")
-    job.is_deleted = True
-    await db.commit()
-    return {"status": "deleted"}
-
-
 @router.get("/pipeline")
 async def get_pipeline(
     db: AsyncSession = Depends(get_db),
@@ -203,6 +166,43 @@ async def get_pipeline(
         "recent": recent,
         "stale": stale,
     }
+
+
+@router.get("/{job_id}", response_model=JobOut)
+async def get_job(job_id: str, db: AsyncSession = Depends(get_db), current_user=Depends(get_current_user)) -> JobOut:
+    job = await db.get(Job, job_id)
+    if job is None or job.user_id != current_user.id or job.is_deleted:
+        raise HTTPException(status_code=404, detail="Job not found")
+    return JobOut.model_validate(job)
+
+
+@router.patch("/{job_id}", response_model=JobOut)
+async def update_job(
+    job_id: str,
+    payload: JobUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user=Depends(get_current_user),
+) -> JobOut:
+    job = await db.get(Job, job_id)
+    if job is None or job.user_id != current_user.id or job.is_deleted:
+        raise HTTPException(status_code=404, detail="Job not found")
+
+    for field, value in payload.model_dump(exclude_unset=True).items():
+        setattr(job, field, value)
+
+    await db.commit()
+    await db.refresh(job)
+    return JobOut.model_validate(job)
+
+
+@router.delete("/{job_id}")
+async def delete_job(job_id: str, db: AsyncSession = Depends(get_db), current_user=Depends(get_current_user)) -> dict:
+    job = await db.get(Job, job_id)
+    if job is None or job.user_id != current_user.id or job.is_deleted:
+        raise HTTPException(status_code=404, detail="Job not found")
+    job.is_deleted = True
+    await db.commit()
+    return {"status": "deleted"}
 
 
 @router.post("/analyze-jd")

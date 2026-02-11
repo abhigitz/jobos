@@ -1,25 +1,29 @@
-from datetime import datetime
-from typing import Optional
-
-from pydantic import BaseModel, EmailStr, Field, field_validator
+from pydantic import BaseModel, Field, field_validator
+import re
 
 
 class RegisterRequest(BaseModel):
-    email: EmailStr
-    password: str = Field(min_length=8)
-    full_name: Optional[str] = None
+    email: str = Field(..., max_length=255)
+    password: str = Field(..., min_length=8, max_length=128)
+    full_name: str = Field(..., max_length=255)
 
-    @field_validator("password")
+    @field_validator('password')
     @classmethod
-    def validate_password(cls, v: str) -> str:
-        if not any(c.isalpha() for c in v) or not any(c.isdigit() for c in v):
-            raise ValueError("Password must contain at least one letter and one number")
+    def password_strength(cls, v: str) -> str:
+        if not re.search(r'[a-zA-Z]', v):
+            raise ValueError('Password must contain at least one letter')
+        if not re.search(r'[0-9]', v):
+            raise ValueError('Password must contain at least one number')
         return v
 
 
 class LoginRequest(BaseModel):
-    email: EmailStr
+    email: str
     password: str
+
+
+class RefreshRequest(BaseModel):
+    refresh_token: str
 
 
 class TokenResponse(BaseModel):
@@ -29,14 +33,13 @@ class TokenResponse(BaseModel):
     expires_in: int = 1800
 
 
-class UserResponse(BaseModel):
+class UserOut(BaseModel):
     id: str
-    email: EmailStr
-    full_name: Optional[str]
+    email: str
+    full_name: str | None
     is_active: bool
     onboarding_completed: bool
-    created_at: datetime
-    updated_at: datetime
+    telegram_chat_id: int | None
 
     class Config:
         from_attributes = True

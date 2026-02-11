@@ -4,23 +4,30 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.auth.jwt_handler import (
+from app.auth import (
     create_access_token,
     create_refresh_token,
     hash_password,
     verify_password,
 )
 from app.database import get_db
+from app.dependencies import get_current_user
 from app.models.profile import ProfileDNA
 from app.models.user import RefreshToken, User
-from app.schemas.auth import LoginRequest, RegisterRequest, TokenResponse, UserResponse
+from app.schemas.auth import (
+    LoginRequest,
+    RefreshRequest,
+    RegisterRequest,
+    TokenResponse,
+    UserOut,
+)
 
 
-router = APIRouter(prefix="/api/auth", tags=["auth"])
+router = APIRouter()
 
 
-@router.post("/register", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
-async def register_user(payload: RegisterRequest, db: AsyncSession = Depends(get_db)) -> UserResponse:
+@router.post("/register", response_model=UserOut, status_code=status.HTTP_201_CREATED)
+async def register_user(payload: RegisterRequest, db: AsyncSession = Depends(get_db)) -> UserOut:
     existing = await db.execute(select(User).where(User.email == payload.email))
     if existing.scalar_one_or_none() is not None:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Email already registered")
@@ -38,7 +45,7 @@ async def register_user(payload: RegisterRequest, db: AsyncSession = Depends(get
 
     await db.commit()
     await db.refresh(user)
-    return UserResponse.model_validate(user)
+    return UserOut.model_validate(user)
 
 
 @router.post("/login", response_model=TokenResponse)
@@ -64,17 +71,14 @@ async def login(payload: LoginRequest, db: AsyncSession = Depends(get_db)) -> To
 
 @router.post("/refresh", response_model=TokenResponse)
 async def refresh_token_endpoint(
-    payload: dict,
+    payload: RefreshRequest,
     db: AsyncSession = Depends(get_db),
 ) -> TokenResponse:
-    from app.auth.jwt_handler import decode_refresh_token
+    from app.auth.jwt_handler import verify_token
 
-    token = payload.get("refresh_token")
-    if not token:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Missing refresh_token")
-
-    payload_data = decode_refresh_token(token)
-    if not payload_data:
+    token = payload.refresh_token
+    payload_data = verify_token(token)
+    if not payload_data or payload_data.get("type") != "refresh":
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid or expired refresh token")
 
     user_id = payload_data.get("sub")
@@ -114,6 +118,6 @@ async def refresh_token_endpoint(
     return TokenResponse(access_token=new_access, refresh_token=new_refresh)
 
 
-@router.get("/me", response_model=UserResponse)
-async def get_me(current_user: User = Depends("app.dependencies.get_current_user")) -> UserResponse:  # type: ignore[valid-type]
-    return UserResponse.model_validate(current_user)
+@router.get("/me", response_model=UserOut)
+async def get_me(current_user: User = Depends(get_current_user)) -> UserOut:
+    return UserOut.model_validate(current_user)

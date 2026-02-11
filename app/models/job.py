@@ -23,11 +23,13 @@ class Job(Base, IDMixin, TimestampMixin):
     source_portal: Mapped[str | None] = mapped_column(String(100))
     fit_score: Mapped[float | None]
     ats_score: Mapped[float | None]
-    status: Mapped[str] = mapped_column(String(50), default="Applied")
+    status: Mapped[str] = mapped_column(String(50), default="Tracking")
     resume_version: Mapped[str | None] = mapped_column(String(100))
     apply_type: Mapped[str | None] = mapped_column(String(10))
     cover_letter: Mapped[str | None] = mapped_column(Text)
     referral_contact: Mapped[str | None] = mapped_column(String(255))
+    application_channel: Mapped[str | None] = mapped_column(String(50))
+    closed_reason: Mapped[str | None] = mapped_column(String(50))
     keywords_matched: Mapped[list[str] | None] = mapped_column(ARRAY(String))
     keywords_missing: Mapped[list[str] | None] = mapped_column(ARRAY(String))
     ai_analysis: Mapped[dict | None] = mapped_column(JSONB)
@@ -39,13 +41,13 @@ class Job(Base, IDMixin, TimestampMixin):
     prep_notes: Mapped[str | None] = mapped_column(Text)
     interview_feedback: Mapped[str | None] = mapped_column(Text)
     is_deleted: Mapped[bool] = mapped_column(Boolean, default=False)
-    notes: Mapped[str | None] = mapped_column(Text)
+    notes: Mapped[list | None] = mapped_column(JSONB, server_default='[]', default=list)
     last_followup_date: Mapped[date | None] = mapped_column(Date())
     followup_count: Mapped[int] = mapped_column(Integer, default=0)
 
     __table_args__ = (
         CheckConstraint(
-            "status IN ('Analyzed', 'Applied', 'Screening', 'Interview Scheduled', 'Interview Done', 'Offer', 'Rejected', 'Withdrawn', 'Ghosted')",
+            "status IN ('Tracking', 'Applied', 'Interview', 'Offer', 'Closed')",
             name="ck_jobs_status_valid",
         ),
     )

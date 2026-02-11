@@ -2,12 +2,21 @@ from datetime import date, datetime
 from typing import Optional
 from uuid import UUID
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 
 class JDAnalyzeRequest(BaseModel):
     jd_text: str = Field(..., min_length=100, max_length=15000)
     jd_url: Optional[str] = Field(None, max_length=1000)
+
+
+class NoteEntry(BaseModel):
+    text: str
+    created_at: str
+
+
+class AddNoteRequest(BaseModel):
+    text: str = Field(..., min_length=1, max_length=5000)
 
 
 class JobCreate(BaseModel):
@@ -16,27 +25,23 @@ class JobCreate(BaseModel):
     jd_text: Optional[str] = None
     jd_url: Optional[str] = None
     source_portal: Optional[str] = Field("Direct", max_length=100)
-    status: str = "Applied"
+    status: str = "Tracking"
     fit_score: Optional[float] = None
     ats_score: Optional[float] = None
     resume_version: Optional[str] = None
     apply_type: Optional[str] = Field("quick", max_length=10)
     referral_contact: Optional[str] = None
-    notes: Optional[str] = None
+    notes: Optional[list[dict]] = None
 
     @field_validator("status")
     @classmethod
     def validate_status(cls, v: str) -> str:
         allowed = {
-            "Analyzed",
+            "Tracking",
             "Applied",
-            "Screening",
-            "Interview Scheduled",
-            "Interview Done",
+            "Interview",
             "Offer",
-            "Rejected",
-            "Withdrawn",
-            "Ghosted",
+            "Closed",
         }
         if v not in allowed:
             raise ValueError("Invalid status")
@@ -72,9 +77,17 @@ class JobUpdate(BaseModel):
     interviewer_linkedin: Optional[str] = None
     prep_notes: Optional[str] = None
     interview_feedback: Optional[str] = None
-    notes: Optional[str] = None
+    notes: Optional[list[dict]] = None
     resume_version: Optional[str] = None
     applied_date: Optional[date] = None
+    company_name: Optional[str] = Field(None, max_length=255)
+    role_title: Optional[str] = Field(None, max_length=255)
+    referral_contact: Optional[str] = Field(None, max_length=255)
+    application_channel: Optional[str] = Field(None, max_length=50)
+    closed_reason: Optional[str] = Field(None, max_length=50)
+    cover_letter: Optional[str] = None
+    source_portal: Optional[str] = Field(None, max_length=100)
+    jd_url: Optional[str] = Field(None, max_length=1000)
 
     @field_validator("status")
     @classmethod
@@ -82,32 +95,55 @@ class JobUpdate(BaseModel):
         if v is None:
             return v
         allowed = {
-            "Analyzed",
+            "Tracking",
             "Applied",
-            "Screening",
-            "Interview Scheduled",
-            "Interview Done",
+            "Interview",
             "Offer",
-            "Rejected",
-            "Withdrawn",
-            "Ghosted",
+            "Closed",
         }
         if v not in allowed:
             raise ValueError("Invalid status")
         return v
+
+    @model_validator(mode='after')
+    def default_closed_reason(self):
+        if self.status == 'Closed' and self.closed_reason is None:
+            self.closed_reason = 'No Response'
+        return self
 
 
 class JobOut(BaseModel):
     id: UUID
     company_name: str
     role_title: str
-    status: str
+    jd_text: Optional[str] = None
+    jd_url: Optional[str] = None
+    source_portal: Optional[str] = None
     fit_score: Optional[float] = None
     ats_score: Optional[float] = None
-    source_portal: Optional[str] = None
+    status: str
+    resume_version: Optional[str] = None
+    apply_type: Optional[str] = None
+    cover_letter: Optional[str] = None
+    referral_contact: Optional[str] = None
+    keywords_matched: Optional[list[str]] = None
+    keywords_missing: Optional[list[str]] = None
+    ai_analysis: Optional[dict] = None
     applied_date: Optional[date] = None
     interview_date: Optional[datetime] = None
+    interview_type: Optional[str] = None
+    interviewer_name: Optional[str] = None
+    interviewer_linkedin: Optional[str] = None
+    prep_notes: Optional[str] = None
+    interview_feedback: Optional[str] = None
+    is_deleted: bool = False
+    notes: Optional[list[dict]] = None
+    application_channel: Optional[str] = None
+    closed_reason: Optional[str] = None
+    last_followup_date: Optional[date] = None
+    followup_count: int = 0
     created_at: datetime
+    updated_at: datetime
 
     class Config:
         from_attributes = True

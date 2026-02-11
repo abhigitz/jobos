@@ -43,3 +43,14 @@ class CompanyOut(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+class CompanySearchResult(BaseModel):
+    id: UUID
+    name: str
+    lane: int
+    sector: Optional[str] = None
+    hq_city: Optional[str] = None
+
+    class Config:
+        from_attributes = True

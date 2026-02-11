@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -6,7 +6,7 @@ from app.database import get_db
 from app.dependencies import get_current_user
 from app.models.company import Company
 from app.models.profile import ProfileDNA
-from app.schemas.companies import CompanyCreate, CompanyOut, CompanyUpdate
+from app.schemas.companies import CompanyCreate, CompanyOut, CompanySearchResult, CompanyUpdate
 from app.services.ai_service import generate_company_deep_dive
 
 
@@ -47,6 +47,25 @@ async def create_company(
     await db.commit()
     await db.refresh(company)
     return CompanyOut.model_validate(company)
+
+
+@router.get("/search", response_model=list[CompanySearchResult])
+async def search_companies(
+    q: str = Query(..., min_length=2),
+    db: AsyncSession = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    """Search companies by name. Returns top 5 matches."""
+    result = await db.execute(
+        select(Company)
+        .where(
+            Company.user_id == current_user.id,
+            Company.name.ilike(f"%{q}%"),
+        )
+        .limit(5)
+    )
+    companies = result.scalars().all()
+    return [CompanySearchResult.model_validate(c) for c in companies]
 
 
 @router.get("/{company_id}", response_model=CompanyOut)

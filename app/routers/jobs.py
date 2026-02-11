@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 from sqlalchemy import and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm.attributes import flag_modified
 
 from app.database import get_db
 from app.dependencies import get_current_user
@@ -14,7 +15,7 @@ from app.models.contact import Contact
 from app.models.interview import Interview
 from app.models.job import Job
 from app.models.profile import ProfileDNA
-from app.schemas.jobs import JDAnalyzeRequest, JobCreate, JobOut, JobUpdate, PaginatedResponse
+from app.schemas.jobs import AddNoteRequest, JDAnalyzeRequest, JobCreate, JobOut, JobUpdate, NoteEntry, PaginatedResponse
 from app.services.activity_log import log_activity
 from app.services.ai_service import analyze_jd, call_claude
 
@@ -113,14 +114,14 @@ async def create_job(
         jd_text=data.get("jd_text"),
         jd_url=data.get("jd_url"),
         source_portal=data.get("source_portal") or "Direct",
-        status=data.get("status") or "Applied",
+        status=data.get("status") or "Tracking",
         fit_score=data.get("fit_score"),
         ats_score=data.get("ats_score"),
         resume_version=data.get("resume_version"),
         apply_type=data.get("apply_type"),
         referral_contact=data.get("referral_contact"),
         notes=data.get("notes"),
-        applied_date=data.get("applied_date") or datetime.utcnow().date(),
+        applied_date=data.get("applied_date") or datetime.now(timezone.utc).date(),
     )
     db.add(job)
     await db.commit()
@@ -136,7 +137,7 @@ async def get_pipeline(
     current_user=Depends(get_current_user),
 ):
     """Get comprehensive pipeline view with aggregations and actionable lists."""
-    today = datetime.utcnow().date()
+    today = datetime.now(timezone.utc).date()
 
     all_jobs = (
         await db.execute(
@@ -150,7 +151,7 @@ async def get_pipeline(
     for job in all_jobs:
         pipeline[job.status] = pipeline.get(job.status, 0) + 1
 
-    inactive_statuses = {"Rejected", "Withdrawn", "Ghosted"}
+    inactive_statuses = {"Closed"}
     active_count = sum(count for status, count in pipeline.items() if status not in inactive_statuses)
 
     recent = []
@@ -171,7 +172,7 @@ async def get_pipeline(
     stale = []
     stale_threshold = today - timedelta(days=14)
     for job in all_jobs:
-        if job.status == "Applied" and job.updated_at and job.updated_at.date() <= stale_threshold:
+        if job.status in ("Applied", "Tracking") and job.updated_at and job.updated_at.date() <= stale_threshold:
             days_since = (today - job.updated_at.date()).days
             stale.append({
                 "id": str(job.id),
@@ -197,11 +198,11 @@ async def get_stale_jobs(
     db: AsyncSession = Depends(get_db),
     current_user=Depends(get_current_user),
 ):
-    """Jobs in 'Applied' status where updated_at is 14+ days ago."""
+    """Jobs in 'Applied' or 'Tracking' status where updated_at is 14+ days ago."""
     fourteen_days_ago = datetime.now(timezone.utc) - timedelta(days=14)
     query = select(Job).where(
         Job.user_id == current_user.id,
-        Job.status == "Applied",
+        Job.status.in_(["Applied", "Tracking"]),
         Job.updated_at < fourteen_days_ago,
         Job.is_deleted.is_(False),
     ).order_by(Job.updated_at.asc())
@@ -218,7 +219,7 @@ async def get_stale_jobs(
             "status": job.status,
             "applied_date": str(job.applied_date) if job.applied_date else None,
             "days_since_update": days,
-            "suggested_action": "Follow up" if days < 21 else "Final follow-up or mark as Ghosted",
+            "suggested_action": "Follow up" if days < 21 else "Final follow-up or mark as Closed",
         })
     return {"stale_jobs": stale_list, "count": len(stale_list)}
 
@@ -234,7 +235,7 @@ async def get_followups(
         await db.execute(
             select(Job).where(
                 Job.user_id == current_user.id,
-                Job.status == "Applied",
+                Job.status.in_(["Applied", "Tracking"]),
                 Job.is_deleted.is_(False),
             )
         )
@@ -270,7 +271,7 @@ async def get_followups(
             entry["action"] = "Second follow-up with value add"
             day_14.append(entry)
         elif days_since_applied >= 21:
-            entry["action"] = "Final follow-up or mark as Ghosted"
+            entry["action"] = "Final follow-up or mark as Closed"
             day_21.append(entry)
 
     return {
@@ -339,7 +340,7 @@ async def analyze_jd_endpoint(
             role_title=role_title,
             jd_text=payload.jd_text,
             jd_url=payload.jd_url,
-            status="Analyzed",
+            status="Tracking",
             fit_score=analysis.get("fit_score"),
             ats_score=analysis.get("ats_score"),
             keywords_matched=analysis.get("keywords_matched"),
@@ -439,8 +440,13 @@ async def update_job(
         raise HTTPException(status_code=404, detail="Job not found")
 
     old_status = job.status
-    for field, value in payload.model_dump(exclude_unset=True).items():
+    update_data = payload.model_dump(exclude_unset=True)
+    for field, value in update_data.items():
         setattr(job, field, value)
+
+    # Default closed_reason when status changes to 'Closed'
+    if update_data.get("status") == "Closed" and job.closed_reason is None:
+        job.closed_reason = "No Response"
 
     await db.commit()
     await db.refresh(job)
@@ -481,9 +487,13 @@ async def log_followup(
     job.last_followup_date = date.today()
     job.followup_count = (job.followup_count or 0) + 1
     if payload.notes:
-        existing_notes = job.notes or ""
-        separator = "\n---\n" if existing_notes else ""
-        job.notes = f"{existing_notes}{separator}[Follow-up {date.today()}] {payload.notes}"
+        existing = job.notes if job.notes is not None else []
+        existing.append({
+            "text": f"[Follow-up {date.today()}] {payload.notes}",
+            "created_at": datetime.now(timezone.utc).isoformat()
+        })
+        job.notes = existing
+        flag_modified(job, "notes")
 
     await db.commit()
     await db.refresh(job)
@@ -502,6 +512,30 @@ async def log_followup(
         "last_followup_date": str(job.last_followup_date),
         "followup_count": job.followup_count,
     }
+
+
+@router.post("/{job_id}/notes")
+async def add_note(
+    job_id: str,
+    payload: AddNoteRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    """Add a note to a job's notes JSONB array."""
+    job = await db.get(Job, job_id)
+    if job is None or job.user_id != current_user.id or job.is_deleted:
+        raise HTTPException(status_code=404, detail="Job not found")
+
+    existing = job.notes if job.notes is not None else []
+    existing.append({
+        "text": payload.text,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    })
+    job.notes = existing
+    flag_modified(job, "notes")
+    await db.commit()
+    await db.refresh(job)
+    return {"notes": job.notes}
 
 
 @router.post("/{job_id}/interview")
@@ -529,9 +563,9 @@ async def schedule_interview(
     )
     db.add(interview)
 
-    # Update job status if currently Applied or Screening
-    if job.status in ("Applied", "Screening"):
-        job.status = "Interview Scheduled"
+    # Update job status if currently Applied or Tracking
+    if job.status in ("Applied", "Tracking"):
+        job.status = "Interview"
 
     await db.commit()
     await db.refresh(interview)
@@ -588,7 +622,7 @@ async def log_debrief(
     interview.status = "Completed"
 
     # Update job status
-    job.status = "Interview Done"
+    job.status = "Interview"
 
     await db.commit()
     await db.refresh(interview)

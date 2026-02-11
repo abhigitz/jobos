@@ -1,7 +1,8 @@
+import secrets
 from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import select
+from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth import (
@@ -12,15 +13,23 @@ from app.auth import (
 )
 from app.database import get_db
 from app.dependencies import get_current_user
+from app.models.email_verification_token import EmailVerificationToken
+from app.models.password_reset_token import PasswordResetToken
 from app.models.profile import ProfileDNA
 from app.models.user import RefreshToken, User
 from app.schemas.auth import (
+    ForgotPasswordRequest,
     LoginRequest,
+    MessageResponse,
     RefreshRequest,
     RegisterRequest,
+    ResendVerificationRequest,
+    ResetPasswordRequest,
     TokenResponse,
     UserOut,
+    VerifyEmailRequest,
 )
+from app.services.email_service import send_password_reset_email, send_verification_email
 
 
 router = APIRouter()
@@ -45,6 +54,18 @@ async def register_user(payload: RegisterRequest, db: AsyncSession = Depends(get
 
     await db.commit()
     await db.refresh(user)
+
+    token = secrets.token_urlsafe(32)
+    verification_token = EmailVerificationToken(
+        user_id=user.id,
+        token=token,
+        expires_at=datetime.now(timezone.utc) + timedelta(hours=24),
+    )
+    db.add(verification_token)
+    await db.commit()
+
+    await send_verification_email(to_email=user.email, token=token, full_name=user.full_name or "")
+
     return UserOut.model_validate(user)
 
 
@@ -54,6 +75,12 @@ async def login(payload: LoginRequest, db: AsyncSession = Depends(get_db)) -> To
     user = result.scalar_one_or_none()
     if user is None or not verify_password(payload.password, user.hashed_password):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
+
+    if not user.email_verified:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Email not verified. Please check your inbox or request a new verification email.",
+        )
 
     access_token = create_access_token(str(user.id))
     refresh_token = create_refresh_token(str(user.id))
@@ -121,3 +148,143 @@ async def refresh_token_endpoint(
 @router.get("/me", response_model=UserOut)
 async def get_me(current_user: User = Depends(get_current_user)) -> UserOut:
     return UserOut.model_validate(current_user)
+
+
+@router.post("/verify-email", response_model=TokenResponse)
+async def verify_email(payload: VerifyEmailRequest, db: AsyncSession = Depends(get_db)) -> TokenResponse:
+    result = await db.execute(
+        select(EmailVerificationToken).where(EmailVerificationToken.token == payload.token)
+    )
+    token_row = result.scalar_one_or_none()
+    if token_row is None:
+        raise HTTPException(status_code=400, detail="Invalid or expired verification token")
+
+    if token_row.expires_at < datetime.now(timezone.utc):
+        await db.delete(token_row)
+        await db.commit()
+        raise HTTPException(status_code=400, detail="Invalid or expired verification token")
+
+    result = await db.execute(select(User).where(User.id == token_row.user_id))
+    user = result.scalar_one_or_none()
+    if user is None:
+        raise HTTPException(status_code=400, detail="Invalid or expired verification token")
+
+    user.email_verified = True
+    await db.delete(token_row)
+    await db.execute(
+        delete(EmailVerificationToken).where(EmailVerificationToken.user_id == user.id)
+    )
+
+    access_token = create_access_token(str(user.id))
+    refresh_token = create_refresh_token(str(user.id))
+
+    rt = RefreshToken(
+        user_id=user.id,
+        token_hash=hash_password(refresh_token),
+        expires_at=datetime.now(timezone.utc) + timedelta(days=7),
+    )
+    db.add(rt)
+    await db.commit()
+
+    return TokenResponse(access_token=access_token, refresh_token=refresh_token)
+
+
+@router.post("/resend-verification", response_model=MessageResponse)
+async def resend_verification(
+    payload: ResendVerificationRequest, db: AsyncSession = Depends(get_db)
+) -> MessageResponse:
+    generic = MessageResponse(message="If an account exists with that email, a verification link has been sent.")
+
+    result = await db.execute(select(User).where(User.email == payload.email))
+    user = result.scalar_one_or_none()
+    if user is None or user.email_verified:
+        return generic
+
+    count_result = await db.execute(
+        select(func.count())
+        .select_from(EmailVerificationToken)
+        .where(
+            EmailVerificationToken.user_id == user.id,
+            EmailVerificationToken.created_at > datetime.now(timezone.utc) - timedelta(hours=1),
+        )
+    )
+    if count_result.scalar() >= 3:
+        return generic
+
+    token = secrets.token_urlsafe(32)
+    verification_token = EmailVerificationToken(
+        user_id=user.id,
+        token=token,
+        expires_at=datetime.now(timezone.utc) + timedelta(hours=24),
+    )
+    db.add(verification_token)
+    await db.commit()
+
+    await send_verification_email(to_email=user.email, token=token, full_name=user.full_name or "")
+
+    return generic
+
+
+@router.post("/forgot-password", response_model=MessageResponse)
+async def forgot_password(
+    payload: ForgotPasswordRequest, db: AsyncSession = Depends(get_db)
+) -> MessageResponse:
+    generic = MessageResponse(message="If an account exists with that email, a password reset link has been sent.")
+
+    result = await db.execute(select(User).where(User.email == payload.email))
+    user = result.scalar_one_or_none()
+    if user is None:
+        return generic
+
+    count_result = await db.execute(
+        select(func.count())
+        .select_from(PasswordResetToken)
+        .where(
+            PasswordResetToken.user_id == user.id,
+            PasswordResetToken.created_at > datetime.now(timezone.utc) - timedelta(hours=1),
+        )
+    )
+    if count_result.scalar() >= 3:
+        return generic
+
+    token = secrets.token_urlsafe(32)
+    reset_token = PasswordResetToken(
+        user_id=user.id,
+        token=token,
+        expires_at=datetime.now(timezone.utc) + timedelta(hours=1),
+    )
+    db.add(reset_token)
+    await db.commit()
+
+    await send_password_reset_email(to_email=user.email, token=token)
+
+    return generic
+
+
+@router.post("/reset-password", response_model=MessageResponse)
+async def reset_password(
+    payload: ResetPasswordRequest, db: AsyncSession = Depends(get_db)
+) -> MessageResponse:
+    result = await db.execute(
+        select(PasswordResetToken).where(PasswordResetToken.token == payload.token)
+    )
+    token_row = result.scalar_one_or_none()
+    if token_row is None:
+        raise HTTPException(status_code=400, detail="Invalid or expired reset token")
+
+    if token_row.expires_at < datetime.now(timezone.utc):
+        await db.delete(token_row)
+        await db.commit()
+        raise HTTPException(status_code=400, detail="Invalid or expired reset token")
+
+    result = await db.execute(select(User).where(User.id == token_row.user_id))
+    user = result.scalar_one_or_none()
+    if user is None:
+        raise HTTPException(status_code=400, detail="Invalid or expired reset token")
+
+    user.hashed_password = hash_password(payload.new_password)
+    await db.execute(delete(PasswordResetToken).where(PasswordResetToken.user_id == user.id))
+    await db.execute(delete(RefreshToken).where(RefreshToken.user_id == user.id))
+    await db.commit()
+
+    return MessageResponse(message="Password has been reset successfully. Please log in with your new password.")

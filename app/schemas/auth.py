@@ -1,3 +1,5 @@
+from uuid import UUID
+
 from pydantic import BaseModel, Field, field_validator
 import re
 
@@ -34,7 +36,7 @@ class TokenResponse(BaseModel):
 
 
 class UserOut(BaseModel):
-    id: str
+    id: UUID
     email: str
     full_name: str | None
     is_active: bool

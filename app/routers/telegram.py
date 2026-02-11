@@ -14,7 +14,7 @@ from app.routers.jobs import analyze_jd_endpoint
 from app.routers.profile import extract_profile_from_resume
 from app.schemas.jobs import JDAnalyzeRequest, JobCreate
 from app.schemas.profile import ProfileExtractRequest
-from app.services.telegram_service import send_message
+from app.services.telegram_service import send_telegram_message
 
 
 router = APIRouter()
@@ -44,7 +44,7 @@ async def telegram_webhook(
     text: str = message.get("text", "")
 
     if not text.startswith("/"):
-        await send_message(chat_id, "Use /help to see available commands.")
+        await send_telegram_message(chat_id, "Use /help to see available commands.")
         return {"ok": True}
 
     parts = text.split(" ", 1)
@@ -54,7 +54,7 @@ async def telegram_webhook(
     user = await _get_user_by_chat(db, chat_id)
 
     if command == "/help":
-        await send_message(
+        await send_telegram_message(
             chat_id,
             "/connect email\n/disconnect\n/jd <job description>\n/apply Company | Role | URL | Source\n/status Company | NewStatus\n/pipeline\n/profile <resume>\n/log 3,4,3,y,1,2,y,Company",
         )
@@ -63,31 +63,31 @@ async def telegram_webhook(
     if command == "/connect":
         email = arg.strip()
         if not email:
-            await send_message(chat_id, "Usage: /connect you@example.com")
+            await send_telegram_message(chat_id, "Usage: /connect you@example.com")
             return {"ok": True}
         res = await db.execute(select(User).where(User.email == email))
         u = res.scalar_one_or_none()
         if not u:
-            await send_message(chat_id, "Email not found. Please register on the dashboard first.")
+            await send_telegram_message(chat_id, "Email not found. Please register on the dashboard first.")
             return {"ok": True}
         u.telegram_chat_id = chat_id
         await db.commit()
-        await send_message(chat_id, "Telegram connected to your JobOS account.")
+        await send_telegram_message(chat_id, "Telegram connected to your JobOS account.")
         return {"ok": True}
 
     if user is None:
-        await send_message(chat_id, "Please connect your account first using /connect email@example.com")
+        await send_telegram_message(chat_id, "Please connect your account first using /connect email@example.com")
         return {"ok": True}
 
     if command == "/disconnect":
         user.telegram_chat_id = None
         await db.commit()
-        await send_message(chat_id, "Disconnected Telegram from your account.")
+        await send_telegram_message(chat_id, "Disconnected Telegram from your account.")
         return {"ok": True}
 
     if command == "/jd":
         if len(arg) < 100:
-            await send_message(chat_id, "Please send a full JD (at least 100 characters).")
+            await send_telegram_message(chat_id, "Please send a full JD (at least 100 characters).")
             return {"ok": True}
         req = JDAnalyzeRequest(jd_text=arg, jd_url=None)
         # Call internal endpoint logic directly
@@ -95,14 +95,14 @@ async def telegram_webhook(
 
         # Here we bypass dependency; pass current user and db into helper
         analysis = await analyze_jd_endpoint(req, db=db, current_user=user)  # type: ignore[arg-type]
-        await send_message(chat_id, f"ATS score: {analysis['analysis'].get('ats_score')}\nFit: {analysis['analysis'].get('fit_score')}")
+        await send_telegram_message(chat_id, f"ATS score: {analysis['analysis'].get('ats_score')}\nFit: {analysis['analysis'].get('fit_score')}")
         return {"ok": True}
 
     if command == "/apply":
         try:
             company, role, url, source = [p.strip() for p in arg.split("|")]
         except ValueError:
-            await send_message(chat_id, "Usage: /apply Company | Role | URL | Source")
+            await send_telegram_message(chat_id, "Usage: /apply Company | Role | URL | Source")
             return {"ok": True}
         job = Job(
             user_id=user.id,
@@ -114,14 +114,14 @@ async def telegram_webhook(
         )
         db.add(job)
         await db.commit()
-        await send_message(chat_id, f"Added application: {company} - {role}")
+        await send_telegram_message(chat_id, f"Added application: {company} - {role}")
         return {"ok": True}
 
     if command == "/status":
         try:
             company, new_status = [p.strip() for p in arg.split("|")]
         except ValueError:
-            await send_message(chat_id, "Usage: /status Company | NewStatus")
+            await send_telegram_message(chat_id, "Usage: /status Company | NewStatus")
             return {"ok": True}
         res = await db.execute(
             select(Job)
@@ -130,11 +130,11 @@ async def telegram_webhook(
         )
         latest = res.scalars().first()
         if not latest:
-            await send_message(chat_id, "No job found for that company.")
+            await send_telegram_message(chat_id, "No job found for that company.")
             return {"ok": True}
         latest.status = new_status
         await db.commit()
-        await send_message(chat_id, f"Updated status for {company} to {new_status}")
+        await send_telegram_message(chat_id, f"Updated status for {company} to {new_status}")
         return {"ok": True}
 
     if command == "/pipeline":
@@ -144,23 +144,23 @@ async def telegram_webhook(
             )
         ).all()
         lines = [f"{status}: {count}" for status, count in rows]
-        await send_message(chat_id, "Pipeline summary:\n" + "\n".join(lines))
+        await send_telegram_message(chat_id, "Pipeline summary:\n" + "\n".join(lines))
         return {"ok": True}
 
     if command == "/profile":
         if len(arg) < 500:
-            await send_message(chat_id, "Please paste your full resume (at least 500 characters).")
+            await send_telegram_message(chat_id, "Please paste your full resume (at least 500 characters).")
             return {"ok": True}
         req = ProfileExtractRequest(resume_text=arg)
         await extract_profile_from_resume(req, db=db, current_user=user)  # type: ignore[arg-type]
-        await send_message(chat_id, "Profile updated from resume.")
+        await send_telegram_message(chat_id, "Profile updated from resume.")
         return {"ok": True}
 
     if command == "/log":
         # Expected format: 3,4,3,y,1,2,y,Company
         parts = [p.strip() for p in arg.split(",")]
         if len(parts) < 8:
-            await send_message(chat_id, "Usage: /log jobs,connections,comments,y/n,calls,referrals,y/n,DeepDiveCompany")
+            await send_telegram_message(chat_id, "Usage: /log jobs,connections,comments,y/n,calls,referrals,y/n,DeepDiveCompany")
             return {"ok": True}
         try:
             jobs_applied = int(parts[0])
@@ -172,7 +172,7 @@ async def telegram_webhook(
             naukri_updated = parts[6].lower().startswith("y")
             deep_dive_company = parts[7]
         except ValueError:
-            await send_message(chat_id, "Invalid numbers in log command.")
+            await send_telegram_message(chat_id, "Invalid numbers in log command.")
             return {"ok": True}
 
         today = date.today()
@@ -204,8 +204,8 @@ async def telegram_webhook(
             log.naukri_updated = naukri_updated
             log.deep_dive_company = deep_dive_company
         await db.commit()
-        await send_message(chat_id, "Daily log saved.")
+        await send_telegram_message(chat_id, "Daily log saved.")
         return {"ok": True}
 
-    await send_message(chat_id, "Unknown command. Use /help.")
+    await send_telegram_message(chat_id, "Unknown command. Use /help.")
     return {"ok": True}

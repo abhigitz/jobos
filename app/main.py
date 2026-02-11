@@ -44,7 +44,19 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-from .routers import analytics, auth, briefing, companies, contacts, content, jobs, profile, telegram  # noqa: E402
+from .routers import (  # noqa: E402
+    analytics,
+    auth,
+    briefing,
+    briefings_user,
+    companies,
+    contacts,
+    content,
+    daily_logs,
+    jobs,
+    profile,
+    telegram,
+)
 
 app.include_router(auth.router, prefix="/api/auth", tags=["auth"])
 app.include_router(profile.router, prefix="/api/profile", tags=["profile"])
@@ -54,6 +66,8 @@ app.include_router(contacts.router, prefix="/api/contacts", tags=["contacts"])
 app.include_router(content.router, prefix="/api/content", tags=["content"])
 app.include_router(analytics.router, prefix="/api/analytics", tags=["analytics"])
 app.include_router(briefing.router, prefix="/api/briefing", tags=["briefing"])
+app.include_router(briefings_user.router, prefix="/api/briefings", tags=["briefings"])
+app.include_router(daily_logs.router, prefix="/api/daily-logs", tags=["daily-logs"])
 app.include_router(telegram.router, prefix="/api/telegram", tags=["telegram"])
 
 

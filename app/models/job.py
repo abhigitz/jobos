@@ -23,8 +23,9 @@ class Job(Base, IDMixin, TimestampMixin):
     source_portal: Mapped[str | None] = mapped_column(String(100))
     fit_score: Mapped[float | None]
     ats_score: Mapped[float | None]
-    status: Mapped[str] = mapped_column(String(50), default="Discovered")
+    status: Mapped[str] = mapped_column(String(50), default="Applied")
     resume_version: Mapped[str | None] = mapped_column(String(100))
+    apply_type: Mapped[str | None] = mapped_column(String(10))
     cover_letter: Mapped[str | None] = mapped_column(Text)
     referral_contact: Mapped[str | None] = mapped_column(String(255))
     keywords_matched: Mapped[list[str] | None] = mapped_column(ARRAY(String))
@@ -42,7 +43,7 @@ class Job(Base, IDMixin, TimestampMixin):
 
     __table_args__ = (
         CheckConstraint(
-            "status IN ('Saved', 'Discovered', 'Analyzed', 'Applied', 'Screening', 'Interview_Scheduled', 'Interview_Done', 'Offer', 'Rejected', 'Withdrawn')",
+            "status IN ('Analyzed', 'Applied', 'Screening', 'Interview Scheduled', 'Interview Done', 'Offer', 'Rejected', 'Withdrawn', 'Ghosted')",
             name="ck_jobs_status_valid",
         ),
     )

@@ -1,68 +1,98 @@
-import logging
-
+"""Telegram Bot API integration service."""
 import httpx
+from app.config import get_settings
 
-from ..config import get_settings
-
-logger = logging.getLogger(__name__)
 settings = get_settings()
 
-BOT_TOKEN = settings.telegram_bot_token
-BASE_URL = f"https://api.telegram.org/bot{BOT_TOKEN}"
 
-
-async def _send_single(chat_id: int, text: str) -> bool:
+async def send_telegram_message(chat_id: int, text: str) -> bool:
+    """
+    Send a message to Telegram. Auto-splits if >4096 chars.
+    
+    Args:
+        chat_id: Telegram chat ID
+        text: Message text to send
+        
+    Returns:
+        True if successful, False otherwise
+    """
+    MAX_LEN = 4096
+    url = f"https://api.telegram.org/bot{settings.telegram_bot_token}/sendMessage"
+    
     try:
-        async with httpx.AsyncClient() as client:
-            response = await client.post(
-                f"{BASE_URL}/sendMessage",
-                json={"chat_id": chat_id, "text": text, "parse_mode": "Markdown"},
-            )
-            if response.status_code != 200:
-                logger.error(f"Telegram send failed: {response.text}")
-                return False
-            return True
-    except Exception as e:  # noqa: BLE001
-        logger.error(f"Telegram error: {e}")
+        if len(text) <= MAX_LEN:
+            async with httpx.AsyncClient() as client:
+                response = await client.post(
+                    url,
+                    json={
+                        "chat_id": chat_id,
+                        "text": text,
+                        "parse_mode": "Markdown",
+                    },
+                )
+                return response.status_code == 200
+        else:
+            # Split at paragraph boundaries
+            chunks = []
+            current = ""
+            for para in text.split("\n\n"):
+                if len(current) + len(para) + 2 > MAX_LEN:
+                    if current.strip():
+                        chunks.append(current.strip())
+                    current = para
+                else:
+                    if current:
+                        current += "\n\n" + para
+                    else:
+                        current = para
+            
+            if current.strip():
+                chunks.append(current.strip())
+            
+            async with httpx.AsyncClient() as client:
+                for chunk in chunks:
+                    response = await client.post(
+                        url,
+                        json={
+                            "chat_id": chat_id,
+                            "text": chunk,
+                            "parse_mode": "Markdown",
+                        },
+                    )
+                    if response.status_code != 200:
+                        return False
+                return True
+    except Exception as e:
+        import logging
+        logging.error(f"Failed to send Telegram message: {e}")
         return False
 
 
-async def send_message(chat_id: int, text: str) -> bool:
-    if len(text) <= 4096:
-        return await _send_single(chat_id, text)
-
-    chunks: list[str] = []
-    while text:
-        if len(text) <= 4096:
-            chunks.append(text)
-            break
-        split_point = text.rfind("\n\n", 0, 4096)
-        if split_point == -1:
-            split_point = text.rfind("\n", 0, 4096)
-        if split_point == -1:
-            split_point = 4096
-        chunks.append(text[:split_point])
-        text = text[split_point:].lstrip()
-
-    success = True
-    for chunk in chunks:
-        if not await _send_single(chat_id, chunk):
-            success = False
-    return success
-
-
-async def register_webhook(app_url: str, secret: str) -> bool:
+async def register_webhook(webhook_url: str, secret_token: str) -> bool:
+    """
+    Register webhook with Telegram Bot API.
+    
+    Args:
+        webhook_url: Full URL where Telegram should send updates
+        secret_token: Secret token for webhook verification
+        
+    Returns:
+        True if successful, False otherwise
+    """
+    url = f"https://api.telegram.org/bot{settings.telegram_bot_token}/setWebhook"
+    
     try:
         async with httpx.AsyncClient() as client:
             response = await client.post(
-                f"{BASE_URL}/setWebhook",
+                url,
                 json={
-                    "url": f"{app_url}/api/telegram/webhook",
-                    "secret_token": secret,
+                    "url": webhook_url,
+                    "secret_token": secret_token,
+                    "allowed_updates": ["message"],
                 },
             )
-            logger.info("Webhook registration: %s", response.json())
             return response.status_code == 200
-    except Exception as e:  # noqa: BLE001
-        logger.error(f"Webhook registration failed: {e}")
+    except Exception as e:
+        import logging
+        logging.error(f"Failed to register Telegram webhook: {e}")
         return False

@@ -11,6 +11,8 @@ class Settings(BaseSettings):
     telegram_webhook_secret: str = ""
     app_url: str = ""
     n8n_api_key: str = ""
+    admin_api_key: str = ""
+    n8n_secret: str = ""
 
     class Config:
         env_file = ".env"

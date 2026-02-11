@@ -53,13 +53,48 @@ async def list_jobs(
     return PaginatedResponse(items=[JobOut.model_validate(i) for i in items], total=total, page=page, per_page=per_page, pages=pages)
 
 
-@router.post("/", response_model=JobOut)
+@router.post("/", response_model=JobOut, status_code=201)
 async def create_job(
     payload: JobCreate,
     db: AsyncSession = Depends(get_db),
     current_user=Depends(get_current_user),
 ) -> JobOut:
-    job = Job(user_id=current_user.id, **payload.model_dump())
+    # Deduplicate by company + role (case-insensitive) for this user
+    existing = await db.execute(
+        select(Job).where(
+            Job.user_id == current_user.id,
+            func.lower(Job.company_name) == func.lower(payload.company_name),
+            func.lower(Job.role_title) == func.lower(payload.role_title),
+            Job.is_deleted.is_(False),
+        )
+    )
+    existing_job = existing.scalar_one_or_none()
+    if existing_job is not None:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "message": f"Job already exists: {payload.company_name} - {payload.role_title}. Use PATCH /api/jobs/{{id}} to update.",
+                "existing_id": str(existing_job.id),
+            },
+        )
+
+    data = payload.model_dump(by_alias=False, exclude_unset=True)
+    job = Job(
+        user_id=current_user.id,
+        company_name=data["company_name"],
+        role_title=data["role_title"],
+        jd_text=data.get("jd_text"),
+        jd_url=data.get("jd_url"),
+        source_portal=data.get("source_portal") or "Direct",
+        status=data.get("status") or "Applied",
+        fit_score=data.get("fit_score"),
+        ats_score=data.get("ats_score"),
+        resume_version=data.get("resume_version"),
+        apply_type=data.get("apply_type"),
+        referral_contact=data.get("referral_contact"),
+        notes=data.get("notes"),
+        applied_date=data.get("applied_date") or datetime.utcnow().date(),
+    )
     db.add(job)
     await db.commit()
     await db.refresh(job)
@@ -103,27 +138,68 @@ async def delete_job(job_id: str, db: AsyncSession = Depends(get_db), current_us
     return {"status": "deleted"}
 
 
-@router.get("/pipeline/summary")
-async def pipeline_summary(
+@router.get("/pipeline")
+async def get_pipeline(
     db: AsyncSession = Depends(get_db),
     current_user=Depends(get_current_user),
-    since: str | None = None,
 ):
-    query = select(Job.status, func.count()).where(Job.user_id == current_user.id, Job.is_deleted.is_(False))
-    if since:
-        try:
-            if since.endswith("d"):
-                days = int(since[:-1])
-                cutoff = datetime.utcnow() - timedelta(days=days)
-            else:
-                cutoff = datetime.fromisoformat(since)
-            query = query.where(Job.created_at >= cutoff)
-        except ValueError:
-            pass
-
-    query = query.group_by(Job.status)
-    rows = (await db.execute(query)).all()
-    return {"pipeline": {status: count for status, count in rows}}
+    """Get comprehensive pipeline view with aggregations and actionable lists."""
+    today = datetime.utcnow().date()
+    
+    # Get all active jobs for this user
+    all_jobs = (
+        await db.execute(
+            select(Job)
+            .where(Job.user_id == current_user.id, Job.is_deleted.is_(False))
+            .order_by(Job.updated_at.desc())
+        )
+    ).scalars().all()
+    
+    # Build pipeline breakdown by status
+    pipeline = {}
+    for job in all_jobs:
+        pipeline[job.status] = pipeline.get(job.status, 0) + 1
+    
+    # Calculate active count (excluding terminal states)
+    inactive_statuses = {"Rejected", "Withdrawn", "Ghosted"}
+    active_count = sum(count for status, count in pipeline.items() if status not in inactive_statuses)
+    
+    # Get recent 5 jobs (ordered by updated_at)
+    recent = []
+    for job in all_jobs[:5]:
+        days_since = (today - job.updated_at.date()).days
+        recent.append({
+            "id": str(job.id),
+            "company": job.company_name,
+            "role": job.role_title,
+            "status": job.status,
+            "applied_date": job.applied_date.isoformat() if job.applied_date else None,
+            "days_since_update": days_since,
+        })
+    
+    # Find stale applications (Applied status, 14+ days since update)
+    stale = []
+    stale_threshold = today - timedelta(days=14)
+    for job in all_jobs:
+        if job.status == "Applied" and job.updated_at.date() <= stale_threshold:
+            days_since = (today - job.updated_at.date()).days
+            stale.append({
+                "id": str(job.id),
+                "company": job.company_name,
+                "role": job.role_title,
+                "status": job.status,
+                "applied_date": job.applied_date.isoformat() if job.applied_date else None,
+                "days_since_update": days_since,
+                "suggested_action": "Follow up or check for referral connection",
+            })
+    
+    return {
+        "pipeline": pipeline,
+        "total": len(all_jobs),
+        "active": active_count,
+        "recent": recent,
+        "stale": stale,
+    }
 
 
 @router.post("/analyze-jd")
@@ -157,38 +233,50 @@ async def analyze_jd_endpoint(
     company_name = analysis.get("company_name") or "Unknown Company"
     role_title = analysis.get("role_title") or "Unknown Role"
 
+    # Check for existing job - upsert behavior
     existing = await db.execute(
         select(Job).where(
             Job.user_id == current_user.id,
-            Job.company_name == company_name,
-            Job.role_title == role_title,
+            func.lower(Job.company_name) == func.lower(company_name),
+            func.lower(Job.role_title) == func.lower(role_title),
             Job.is_deleted.is_(False),
         )
     )
     existing_job = existing.scalar_one_or_none()
 
-    job = Job(
-        user_id=current_user.id,
-        company_name=company_name,
-        role_title=role_title,
-        jd_text=payload.jd_text,
-        jd_url=payload.jd_url,
-        status="Analyzed",
-        fit_score=analysis.get("fit_score"),
-        ats_score=analysis.get("ats_score"),
-        keywords_matched=analysis.get("keywords_matched"),
-        keywords_missing=analysis.get("keywords_missing"),
-        ai_analysis=analysis,
-    )
-    db.add(job)
+    if existing_job:
+        # Update existing job with new analysis
+        existing_job.fit_score = analysis.get("fit_score")
+        existing_job.ats_score = analysis.get("ats_score")
+        existing_job.jd_text = payload.jd_text
+        existing_job.jd_url = payload.jd_url
+        existing_job.keywords_matched = analysis.get("keywords_matched")
+        existing_job.keywords_missing = analysis.get("keywords_missing")
+        existing_job.ai_analysis = analysis
+        existing_job.source_portal = "JD Analysis"
+        job = existing_job
+    else:
+        # Create new job
+        job = Job(
+            user_id=current_user.id,
+            company_name=company_name,
+            role_title=role_title,
+            jd_text=payload.jd_text,
+            jd_url=payload.jd_url,
+            status="Analyzed",
+            fit_score=analysis.get("fit_score"),
+            ats_score=analysis.get("ats_score"),
+            keywords_matched=analysis.get("keywords_matched"),
+            keywords_missing=analysis.get("keywords_missing"),
+            ai_analysis=analysis,
+            source_portal="JD Analysis",
+        )
+        db.add(job)
+
     await db.commit()
     await db.refresh(job)
 
-    response = {"analysis": analysis, "job_id": str(job.id)}
-    if existing_job is not None:
-        response["duplicate_job_id"] = str(existing_job.id)
-
-    return response
+    return {"analysis": analysis, "job_id": str(job.id)}
 
 
 @router.get("/search")

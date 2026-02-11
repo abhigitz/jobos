@@ -29,8 +29,12 @@ class DailyLog(Base, IDMixin, TimestampMixin):
     self_rating: Mapped[int | None]
     key_win: Mapped[str | None] = mapped_column(Text)
     tomorrow_priorities: Mapped[str | None] = mapped_column(Text)
+    energy_level: Mapped[int | None]
+    mood: Mapped[str | None] = mapped_column(String(50))
+    notes: Mapped[str | None] = mapped_column(Text)
 
     __table_args__ = (
         UniqueConstraint("user_id", "log_date", name="uq_daily_log_user_date"),
         CheckConstraint("self_rating BETWEEN 1 AND 10", name="ck_daily_log_self_rating_range"),
+        CheckConstraint("energy_level BETWEEN 1 AND 5", name="ck_daily_log_energy_range"),
     )

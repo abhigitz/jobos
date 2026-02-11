@@ -20,7 +20,7 @@ async def lifespan(app: FastAPI):
     yield
 
 
-app = FastAPI(title="JobOS API", version="0.2.0", lifespan=lifespan, redirect_slashes=False)
+app = FastAPI(title="JobOS API", version="0.2.0", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,

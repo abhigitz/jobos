@@ -12,7 +12,7 @@ from app.services.ai_service import extract_profile
 router = APIRouter()
 
 
-@router.get("/", response_model=ProfileOut)
+@router.get("", response_model=ProfileOut)
 async def get_profile(
     db: AsyncSession = Depends(get_db),
     current_user=Depends(get_current_user),

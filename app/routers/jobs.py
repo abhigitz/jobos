@@ -18,7 +18,7 @@ from app.services.ai_service import analyze_jd
 router = APIRouter()
 
 
-def _paginate(query, page: int, per_page: int):
+@router.get("", response_model=PaginatedResponse)
     offset = (page - 1) * per_page
     return query.limit(per_page).offset(offset)
 

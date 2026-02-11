@@ -13,7 +13,7 @@ from app.schemas.contacts import ContactCreate, ContactOut, ContactUpdate
 router = APIRouter()
 
 
-@router.get("/", response_model=list[ContactOut])
+@router.get("", response_model=list[ContactOut])
 async def list_contacts(
     company: str | None = None,
     referral_status: str | None = None,

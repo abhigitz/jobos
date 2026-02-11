@@ -13,7 +13,7 @@ from app.services.ai_service import generate_company_deep_dive
 router = APIRouter()
 
 
-@router.get("/", response_model=list[CompanyOut])
+@router.get("", response_model=list[CompanyOut])
 async def list_companies(
     lane: int | None = None,
     db: AsyncSession = Depends(get_db),

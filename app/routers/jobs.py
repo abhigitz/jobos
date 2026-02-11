@@ -18,12 +18,12 @@ from app.services.ai_service import analyze_jd
 router = APIRouter()
 
 
-@router.get("", response_model=PaginatedResponse)
+def _paginate(query, page: int, per_page: int):
     offset = (page - 1) * per_page
     return query.limit(per_page).offset(offset)
 
 
-@router.get("/", response_model=PaginatedResponse)
+@router.get("", response_model=PaginatedResponse)
 async def list_jobs(
     db: AsyncSession = Depends(get_db),
     current_user=Depends(get_current_user),

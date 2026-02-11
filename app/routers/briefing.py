@@ -23,7 +23,7 @@ from app.services.ai_service import (
     generate_market_intel,
     generate_weekly_review,
 )
-from app.services.telegram_service import send_message
+from app.services.telegram_service import send_telegram_message
 
 
 router = APIRouter()
@@ -122,7 +122,7 @@ async def morning_briefing(
 
             text = await generate_morning_briefing(data)
             if text:
-                await send_message(user.telegram_chat_id, text)  # type: ignore[arg-type]
+                await send_telegram_message(user.telegram_chat_id, text)  # type: ignore[arg-type]
         except Exception as e:  # noqa: BLE001
             # log and continue to next user
             import logging
@@ -147,7 +147,7 @@ async def midday_briefing(
             data = {"logs": [l.jobs_applied for l in logs]}
             text = await generate_midday_check(data)
             if text:
-                await send_message(user.telegram_chat_id, text)  # type: ignore[arg-type]
+                await send_telegram_message(user.telegram_chat_id, text)  # type: ignore[arg-type]
         except Exception as e:  # noqa: BLE001
             import logging
 
@@ -170,7 +170,7 @@ async def evening_prompt(
                 "3. Any interviews scheduled?\n"
                 "4. What's your top priority for tomorrow?"
             )
-            await send_message(user.telegram_chat_id, text)  # type: ignore[arg-type]
+            await send_telegram_message(user.telegram_chat_id, text)  # type: ignore[arg-type]
         except Exception as e:  # noqa: BLE001
             import logging
 
@@ -250,7 +250,7 @@ async def content_draft_briefing(
                 item.draft_text = draft
                 item.status = "Drafted"
                 await db.commit()
-                await send_message(user.telegram_chat_id, draft)  # type: ignore[arg-type]
+                await send_telegram_message(user.telegram_chat_id, draft)  # type: ignore[arg-type]
         except Exception as e:  # noqa: BLE001
             import logging
 
@@ -290,7 +290,7 @@ async def weekly_review_briefing(
             }
             text = await generate_weekly_review(data)
             if text:
-                await send_message(user.telegram_chat_id, text)  # type: ignore[arg-type]
+                await send_telegram_message(user.telegram_chat_id, text)  # type: ignore[arg-type]
         except Exception as e:  # noqa: BLE001
             import logging
 
@@ -337,7 +337,7 @@ async def company_deep_dive_briefing(
                 f"{deep_dive}\n\n"
                 f"❓ Practice: \"How would you scale user acquisition for {company.name}?\""
             )
-            await send_message(user.telegram_chat_id, text)  # type: ignore[arg-type]
+            await send_telegram_message(user.telegram_chat_id, text)  # type: ignore[arg-type]
             results.append({"user_id": str(user.id), "company": company.name})
         except Exception as e:  # noqa: BLE001
             import logging
@@ -438,7 +438,7 @@ async def jd_patterns_briefing(
                 for idx, rec in enumerate(gap_recommendations, start=1):
                     lines.append(f"{idx}. {rec}")
 
-            await send_message(user.telegram_chat_id, "\n".join(lines))  # type: ignore[arg-type]
+            await send_telegram_message(user.telegram_chat_id, "\n".join(lines))  # type: ignore[arg-type]
         except Exception as e:  # noqa: BLE001
             import logging
 
@@ -513,7 +513,7 @@ async def interview_prep_briefing(
                     f"Interview in {hours:.0f} hours\n\n"
                     f"{prep_doc}"
                 )
-                await send_message(user.telegram_chat_id, text)  # type: ignore[arg-type]
+                await send_telegram_message(user.telegram_chat_id, text)  # type: ignore[arg-type]
         except Exception as e:  # noqa: BLE001
             import logging
 
@@ -560,7 +560,7 @@ async def market_intel_briefing(
                 f"{digest}\n\n"
                 "⚠️ Based on Claude's training data — verify time-sensitive claims before acting."
             )
-            await send_message(user.telegram_chat_id, text)  # type: ignore[arg-type]
+            await send_telegram_message(user.telegram_chat_id, text)  # type: ignore[arg-type]
         except Exception as e:  # noqa: BLE001
             import logging
 

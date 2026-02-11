@@ -167,7 +167,10 @@ async def get_pipeline(
     # Get recent 5 jobs (ordered by updated_at)
     recent = []
     for job in all_jobs[:5]:
-        days_since = (today - job.updated_at.date()).days
+        if job.updated_at:
+            days_since = (today - job.updated_at.date()).days
+        else:
+            days_since = 0
         recent.append({
             "id": str(job.id),
             "company": job.company_name,
@@ -181,7 +184,7 @@ async def get_pipeline(
     stale = []
     stale_threshold = today - timedelta(days=14)
     for job in all_jobs:
-        if job.status == "Applied" and job.updated_at.date() <= stale_threshold:
+        if job.status == "Applied" and job.updated_at and job.updated_at.date() <= stale_threshold:
             days_since = (today - job.updated_at.date()).days
             stale.append({
                 "id": str(job.id),

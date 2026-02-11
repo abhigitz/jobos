@@ -10,6 +10,8 @@ from .resume_variant import ResumeVariant
 from .jd_keyword import JDKeyword
 from .interview import Interview
 from .activity_log import ActivityLog
+from .email_verification_token import EmailVerificationToken
+from .password_reset_token import PasswordResetToken
 
 __all__ = [
     "User",
@@ -25,4 +27,6 @@ __all__ = [
     "JDKeyword",
     "Interview",
     "ActivityLog",
+    "EmailVerificationToken",
+    "PasswordResetToken",
 ]

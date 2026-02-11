@@ -20,6 +20,7 @@ class User(Base, IDMixin, TimestampMixin):
     telegram_chat_id: Mapped[int | None] = mapped_column(BigInteger, unique=True)
     onboarding_completed: Mapped[bool] = mapped_column(Boolean, default=False)
     notification_preference: Mapped[str] = mapped_column(String(20), default="telegram")
+    email_verified: Mapped[bool] = mapped_column(Boolean, default=False)
 
     refresh_tokens: Mapped[list["RefreshToken"]] = relationship(
         back_populates="user", cascade="all, delete-orphan"

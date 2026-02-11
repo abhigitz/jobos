@@ -38,6 +38,7 @@ python-jose==3.5.0
 python-multipart==0.0.22
 python-telegram-bot==22.6
 PyYAML==6.0.3
+resend==2.21.0
 rsa==4.9.1
 six==1.17.0
 slowapi==0.1.9

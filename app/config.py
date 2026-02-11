@@ -13,6 +13,9 @@ class Settings(BaseSettings):
     n8n_api_key: str = ""
     admin_api_key: str = ""
     n8n_secret: str = ""
+    resend_api_key: str = ""
+    email_from: str = "JobOS <onboarding@resend.dev>"
+    frontend_url: str = "http://localhost:3000"
 
     class Config:
         env_file = ".env"

@@ -1,5 +1,6 @@
 from datetime import date
 from typing import Optional
+from uuid import UUID
 
 from pydantic import BaseModel, Field
 
@@ -23,7 +24,7 @@ class ContentUpdate(BaseModel):
 
 
 class ContentOut(BaseModel):
-    id: str
+    id: UUID
     scheduled_date: date
     topic: Optional[str]
     category: Optional[str]

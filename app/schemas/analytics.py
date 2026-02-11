@@ -1,5 +1,6 @@
 from datetime import date, datetime
 from typing import Optional
+from uuid import UUID
 
 from pydantic import BaseModel
 
@@ -21,7 +22,7 @@ class DailyLogIn(BaseModel):
 
 
 class DailyLogOut(BaseModel):
-    id: str
+    id: UUID
     log_date: date
     jobs_applied: int
     connections_sent: int
@@ -36,7 +37,7 @@ class DailyLogOut(BaseModel):
 
 
 class WeeklyReviewOut(BaseModel):
-    id: str
+    id: UUID
     week_number: Optional[int]
     week_start: Optional[date]
     week_end: Optional[date]

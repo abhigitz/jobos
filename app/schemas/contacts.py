@@ -1,5 +1,6 @@
 from datetime import date
 from typing import Optional
+from uuid import UUID
 
 from pydantic import BaseModel, Field
 
@@ -28,7 +29,7 @@ class ContactUpdate(BaseModel):
 
 
 class ContactOut(BaseModel):
-    id: str
+    id: UUID
     name: str
     company: Optional[str]
     their_role: Optional[str]

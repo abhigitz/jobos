@@ -1,5 +1,6 @@
 from datetime import date, datetime
 from typing import Optional
+from uuid import UUID
 
 from pydantic import BaseModel, Field
 
@@ -34,7 +35,7 @@ class JobUpdate(BaseModel):
 
 
 class JobOut(BaseModel):
-    id: str
+    id: UUID
     company_name: str
     role_title: str
     status: str

@@ -1,4 +1,5 @@
 from typing import Optional
+from uuid import UUID
 
 from pydantic import BaseModel, Field
 
@@ -20,7 +21,7 @@ class CompanyUpdate(BaseModel):
 
 
 class CompanyOut(BaseModel):
-    id: str
+    id: UUID
     name: str
     lane: int
     stage: Optional[str]

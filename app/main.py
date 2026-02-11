@@ -3,6 +3,8 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.requests import Request
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -20,7 +22,19 @@ async def lifespan(app: FastAPI):
     yield
 
 
-app = FastAPI(title="JobOS API", version="0.2.0", lifespan=lifespan)
+class TrailingSlashMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next):  # type: ignore[override]
+        if request.url.path != "/" and request.url.path.endswith("/"):
+            scope = request.scope
+            scope["path"] = scope["path"].rstrip("/")
+            if "raw_path" in scope and isinstance(scope["raw_path"], (bytes, bytearray)):
+                scope["raw_path"] = scope["raw_path"].rstrip(b"/")
+        return await call_next(request)
+
+
+app = FastAPI(title="JobOS API", version="0.2.0", lifespan=lifespan, redirect_slashes=False)
+
+app.add_middleware(TrailingSlashMiddleware)
 
 app.add_middleware(
     CORSMiddleware,

@@ -5,7 +5,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
-from app.dependencies import get_current_user
+from app.dependencies import get_current_user_or_n8n
 from app.models.company import Company
 from app.models.contact import Contact
 from app.models.content import ContentCalendar
@@ -14,6 +14,7 @@ from app.models.jd_keyword import JDKeyword
 from app.models.job import Job
 from app.models.profile import ProfileDNA
 from app.models.weekly_metrics import WeeklyMetrics
+from app.services.activity_log import log_activity
 from app.services.ai_service import (
     generate_morning_briefing,
     generate_midday_check,
@@ -26,12 +27,11 @@ router = APIRouter()
 @router.get("/morning")
 async def get_morning_briefing(
     db: AsyncSession = Depends(get_db),
-    current_user=Depends(get_current_user),
+    current_user=Depends(get_current_user_or_n8n),
 ):
     """Generate AI-powered morning briefing with actionable priorities."""
     today = date.today()
-    
-    # Gather data for briefing
+
     # 1. Active pipeline jobs
     jobs = (
         await db.execute(
@@ -42,7 +42,7 @@ async def get_morning_briefing(
             )
         )
     ).scalars().all()
-    
+
     # 2. Follow-ups due today or overdue
     contacts_due = (
         await db.execute(
@@ -55,7 +55,7 @@ async def get_morning_briefing(
             )
         )
     ).scalars().all()
-    
+
     # 3. Stale applications (14+ days)
     stale_threshold = today - timedelta(days=14)
     stale_jobs = [
@@ -70,7 +70,7 @@ async def get_morning_briefing(
         ).scalars().all()
         if j.updated_at.date() <= stale_threshold
     ]
-    
+
     # 4. Yesterday's activity
     yesterday = today - timedelta(days=1)
     yesterday_log = (
@@ -81,7 +81,7 @@ async def get_morning_briefing(
             )
         )
     ).scalar_one_or_none()
-    
+
     # 5. Today's content topic
     content_today = (
         await db.execute(
@@ -91,26 +91,39 @@ async def get_morning_briefing(
             )
         )
     ).scalar_one_or_none()
-    
-    # 6. Next company for deep-dive (from company rotation or oldest researched)
+
+    # 6. Next company for deep-dive — EXCLUDE is_excluded companies
     next_company = (
         await db.execute(
             select(Company)
-            .where(Company.user_id == current_user.id)
+            .where(
+                Company.user_id == current_user.id,
+                Company.is_excluded.is_(False),
+            )
             .order_by(Company.last_researched.asc().nulls_first())
             .limit(1)
         )
     ).scalar_one_or_none()
-    
-    # 7. Get profile for context
+
+    # 7. Get excluded companies list for AI prompt
+    excluded_companies = (
+        await db.execute(
+            select(Company.name).where(
+                Company.user_id == current_user.id,
+                Company.is_excluded.is_(True),
+            )
+        )
+    ).scalars().all()
+
+    # 8. Get profile for context
     profile_res = await db.execute(
         select(ProfileDNA).where(ProfileDNA.user_id == current_user.id)
     )
     profile = profile_res.scalar_one_or_none()
-    
-    # 8. Calculate streak (consecutive days with activity)
+
+    # 9. Calculate streak (consecutive days with activity)
     streak_days = 0
-    check_date = today - timedelta(days=1)  # Start from yesterday
+    check_date = today - timedelta(days=1)
     while True:
         log = (
             await db.execute(
@@ -120,13 +133,16 @@ async def get_morning_briefing(
                 )
             )
         ).scalar_one_or_none()
-        
+
+        is_sunday = check_date.weekday() == 6
         if log and (log.jobs_applied > 0 or log.connections_sent > 0 or log.comments_made > 0):
             streak_days += 1
             check_date -= timedelta(days=1)
+        elif is_sunday:
+            check_date -= timedelta(days=1)
         else:
             break
-    
+
     # Build data dict for AI
     data = {
         "today": today.isoformat(),
@@ -172,11 +188,11 @@ async def get_morning_briefing(
         } if content_today else None,
         "deep_dive_company": next_company.name if next_company else None,
         "streak_days": streak_days,
+        "excluded_companies": excluded_companies,
     }
-    
-    # Generate briefing with AI
+
     briefing_text = await generate_morning_briefing(data)
-    
+
     return {
         "briefing": briefing_text or "Unable to generate briefing at this time.",
         "generated_at": today.isoformat(),
@@ -192,12 +208,11 @@ async def get_morning_briefing(
 @router.get("/midday")
 async def get_midday_check(
     db: AsyncSession = Depends(get_db),
-    current_user=Depends(get_current_user),
+    current_user=Depends(get_current_user_or_n8n),
 ):
     """Generate mid-day accountability check."""
     today = date.today()
-    
-    # Get today's log if it exists
+
     today_log = (
         await db.execute(
             select(DailyLog).where(
@@ -206,8 +221,7 @@ async def get_midday_check(
             )
         )
     ).scalar_one_or_none()
-    
-    # Get last 3 days for context
+
     last_3_days = []
     for i in range(1, 4):
         check_date = today - timedelta(days=i)
@@ -225,7 +239,7 @@ async def get_midday_check(
                 "jobs_applied": log.jobs_applied,
                 "connections_sent": log.connections_sent,
             })
-    
+
     data = {
         "today": today.isoformat(),
         "today_log": {
@@ -235,14 +249,14 @@ async def get_midday_check(
         } if today_log else None,
         "last_3_days": last_3_days,
         "morning_targets": {
-            "applications": 3,  # Default targets
+            "applications": 3,
             "connections": 4,
             "comments": 3,
         },
     }
-    
+
     message = await generate_midday_check(data)
-    
+
     return {
         "message": message or "Keep going! Make progress on your applications today.",
         "generated_at": today.isoformat(),
@@ -253,12 +267,11 @@ async def get_midday_check(
 async def process_evening_checkin(
     payload: dict,
     db: AsyncSession = Depends(get_db),
-    current_user=Depends(get_current_user),
+    current_user=Depends(get_current_user_or_n8n),
 ):
     """Process evening check-in: save log and generate tomorrow's priorities."""
     today = date.today()
-    
-    # Extract check-in data
+
     log_data = {
         "log_date": today,
         "jobs_applied": payload.get("jobs_applied", 0),
@@ -272,8 +285,7 @@ async def process_evening_checkin(
         "energy_level": payload.get("energy_level"),
         "mood": payload.get("mood"),
     }
-    
-    # Upsert daily log
+
     existing = await db.execute(
         select(DailyLog).where(
             DailyLog.user_id == current_user.id,
@@ -281,7 +293,7 @@ async def process_evening_checkin(
         )
     )
     log = existing.scalar_one_or_none()
-    
+
     if log:
         for key, value in log_data.items():
             if key != "log_date":
@@ -289,9 +301,18 @@ async def process_evening_checkin(
     else:
         log = DailyLog(user_id=current_user.id, **log_data)
         db.add(log)
-    
+
     await db.commit()
-    
+
+    # Log to activity_log
+    jobs_applied = log_data.get("jobs_applied", 0)
+    energy_level = log_data.get("energy_level", "N/A")
+    await log_activity(
+        db, current_user.id, "checkin_logged",
+        f"Day logged: {jobs_applied} apps, energy {energy_level}/5",
+    )
+    await db.commit()
+
     # Get last 7 days for trend
     last_7_days = []
     for i in range(1, 8):
@@ -311,17 +332,7 @@ async def process_evening_checkin(
                 "connections_sent": past_log.connections_sent,
                 "energy_level": past_log.energy_level,
             })
-    
-    # Get active pipeline count
-    active_count = (
-        await db.execute(
-            select(DailyLog).where(
-                DailyLog.user_id == current_user.id,
-                DailyLog.log_date == today,
-            )
-        )
-    ).scalar_one_or_none()
-    
+
     pipeline_counts = {}
     jobs = (
         await db.execute(
@@ -333,8 +344,7 @@ async def process_evening_checkin(
     ).scalars().all()
     for j in jobs:
         pipeline_counts[j.status] = pipeline_counts.get(j.status, 0) + 1
-    
-    # Get tomorrow's follow-ups
+
     tomorrow = today + timedelta(days=1)
     tomorrow_followups = (
         await db.execute(
@@ -345,7 +355,7 @@ async def process_evening_checkin(
             )
         )
     ).scalars().all()
-    
+
     data = {
         "today_log": log_data,
         "last_7_days_trend": last_7_days,
@@ -355,9 +365,9 @@ async def process_evening_checkin(
             for c in tomorrow_followups
         ],
     }
-    
-    priorities = await generate_weekly_review(data)  # Reuse for now, can create specific function
-    
+
+    priorities = await generate_weekly_review(data)
+
     return {
         "log_saved": True,
         "log_date": today.isoformat(),
@@ -369,14 +379,13 @@ async def process_evening_checkin(
 @router.get("/weekly")
 async def get_weekly_review(
     db: AsyncSession = Depends(get_db),
-    current_user=Depends(get_current_user),
+    current_user=Depends(get_current_user_or_n8n),
 ):
     """Generate comprehensive weekly review with AI analysis."""
     today = date.today()
     week_start = today - timedelta(days=today.weekday())
     week_end = week_start + timedelta(days=6)
-    
-    # Get this week's daily logs
+
     logs = (
         await db.execute(
             select(DailyLog).where(
@@ -386,8 +395,7 @@ async def get_weekly_review(
             )
         )
     ).scalars().all()
-    
-    # Get this week's job activities
+
     jobs_this_week = (
         await db.execute(
             select(Job).where(
@@ -397,17 +405,16 @@ async def get_weekly_review(
             )
         )
     ).scalars().all()
-    
-    # Calculate metrics
+
     total_applied = sum(log.jobs_applied for log in logs)
     total_connections = sum(log.connections_sent for log in logs)
     total_comments = sum(log.comments_made for log in logs)
     total_calls = sum(log.networking_calls for log in logs)
     total_referrals = sum(log.referrals_asked for log in logs)
     posts_published = sum(1 for log in logs if log.post_published)
-    avg_energy = sum(log.energy_level for log in logs if log.energy_level) / len([l for l in logs if l.energy_level]) if any(l.energy_level for l in logs) else None
-    
-    # Get previous week for comparison
+    energy_logs = [log.energy_level for log in logs if log.energy_level]
+    avg_energy = sum(energy_logs) / len(energy_logs) if energy_logs else None
+
     prev_week_start = week_start - timedelta(days=7)
     prev_week_end = prev_week_start + timedelta(days=6)
     prev_logs = (
@@ -419,13 +426,10 @@ async def get_weekly_review(
             )
         )
     ).scalars().all()
-    
     prev_total_applied = sum(log.jobs_applied for log in prev_logs)
-    
-    # Pipeline changes
+
     new_applications = len(jobs_this_week)
-    status_changes = []  # Would need to track status history
-    
+
     data = {
         "week": {
             "start": week_start.isoformat(),
@@ -458,13 +462,11 @@ async def get_weekly_review(
         },
         "pipeline": {
             "new_applications": new_applications,
-            "status_changes": status_changes,
         },
     }
-    
+
     review = await generate_weekly_review(data)
-    
-    # Save metrics to weekly_metrics table
+
     metrics = WeeklyMetrics(
         user_id=current_user.id,
         week_number=week_start.isocalendar().week,
@@ -475,13 +477,13 @@ async def get_weekly_review(
         total_calls=total_calls,
         total_referrals=total_referrals,
         posts_published=posts_published,
-        interviews_scheduled=0,  # Would need to count from jobs
-        response_rate=None,  # Would need to calculate
+        interviews_scheduled=0,
+        response_rate=None,
         ai_analysis=review,
     )
     db.add(metrics)
     await db.commit()
-    
+
     return {
         "review": review or "Weekly review unavailable at this time.",
         "metrics": {

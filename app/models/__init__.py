@@ -8,6 +8,8 @@ from .daily_log import DailyLog
 from .weekly_metrics import WeeklyMetrics
 from .resume_variant import ResumeVariant
 from .jd_keyword import JDKeyword
+from .interview import Interview
+from .activity_log import ActivityLog
 
 __all__ = [
     "User",
@@ -21,4 +23,6 @@ __all__ = [
     "WeeklyMetrics",
     "ResumeVariant",
     "JDKeyword",
+    "Interview",
+    "ActivityLog",
 ]

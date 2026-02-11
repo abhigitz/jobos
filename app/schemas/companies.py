@@ -10,6 +10,9 @@ class CompanyCreate(BaseModel):
     stage: Optional[str] = Field(None, max_length=50)
     sector: Optional[str] = Field(None, max_length=100)
     website: Optional[str] = Field(None, max_length=500)
+    b2c_validated: Optional[bool] = None
+    hq_city: Optional[str] = Field(None, max_length=100)
+    notes: Optional[str] = None
 
 
 class CompanyUpdate(BaseModel):
@@ -17,6 +20,10 @@ class CompanyUpdate(BaseModel):
     stage: Optional[str] = None
     sector: Optional[str] = None
     website: Optional[str] = None
+    b2c_validated: Optional[bool] = None
+    hq_city: Optional[str] = None
+    is_excluded: Optional[bool] = None
+    deep_dive_content: Optional[str] = None
     notes: Optional[str] = None
 
 
@@ -26,6 +33,13 @@ class CompanyOut(BaseModel):
     lane: int
     stage: Optional[str]
     sector: Optional[str]
+    website: Optional[str] = None
+    b2c_validated: bool = False
+    hq_city: Optional[str] = None
+    is_excluded: bool = False
+    deep_dive_done: bool = False
+    deep_dive_content: Optional[str] = None
+    notes: Optional[str] = None
 
     class Config:
         from_attributes = True

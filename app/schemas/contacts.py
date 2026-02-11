@@ -12,6 +12,9 @@ class ContactCreate(BaseModel):
     connection_type: Optional[str] = None
     linkedin_url: Optional[str] = None
     email: Optional[str] = None
+    follow_up_date: Optional[date] = None
+    referral_status: Optional[str] = None
+    notes: Optional[str] = None
 
 
 class ContactUpdate(BaseModel):
@@ -33,7 +36,16 @@ class ContactOut(BaseModel):
     name: str
     company: Optional[str]
     their_role: Optional[str]
+    connection_type: Optional[str] = None
+    linkedin_url: Optional[str] = None
+    email: Optional[str] = None
+    reached_out_date: Optional[date] = None
+    response: Optional[str] = None
+    follow_up_date: Optional[date] = None
     referral_status: str
+    last_outreach_date: Optional[date] = None
+    outreach_notes: Optional[str] = None
+    notes: Optional[str] = None
 
     class Config:
         from_attributes = True

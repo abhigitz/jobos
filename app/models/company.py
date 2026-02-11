@@ -29,6 +29,7 @@ class Company(Base, IDMixin, TimestampMixin):
     deep_dive_done: Mapped[bool] = mapped_column(Boolean, default=False)
     deep_dive_content: Mapped[str | None] = mapped_column(Text)
     investors: Mapped[list[str] | None] = mapped_column(ARRAY(String))
+    is_excluded: Mapped[bool] = mapped_column(Boolean, default=False)
     notes: Mapped[str | None] = mapped_column(Text)
 
     __table_args__ = (

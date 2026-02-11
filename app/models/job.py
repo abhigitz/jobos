@@ -40,6 +40,8 @@ class Job(Base, IDMixin, TimestampMixin):
     interview_feedback: Mapped[str | None] = mapped_column(Text)
     is_deleted: Mapped[bool] = mapped_column(Boolean, default=False)
     notes: Mapped[str | None] = mapped_column(Text)
+    last_followup_date: Mapped[date | None] = mapped_column(Date())
+    followup_count: Mapped[int] = mapped_column(Integer, default=0)
 
     __table_args__ = (
         CheckConstraint(

@@ -26,6 +26,8 @@ class Contact(Base, IDMixin, TimestampMixin):
     response: Mapped[str | None] = mapped_column(Text)
     follow_up_date: Mapped[datetime | None] = mapped_column(Date())
     referral_status: Mapped[str] = mapped_column(String(50), default="Identified")
+    last_outreach_date: Mapped[datetime | None] = mapped_column(Date())
+    outreach_notes: Mapped[str | None] = mapped_column(Text)
     is_deleted: Mapped[bool] = mapped_column(Boolean, default=False)
     notes: Mapped[str | None] = mapped_column(Text)
 

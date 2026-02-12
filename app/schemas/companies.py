@@ -1,7 +1,7 @@
 from typing import Optional
 from uuid import UUID
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 
 class CompanyCreate(BaseModel):
@@ -39,6 +39,7 @@ class CompanyOut(BaseModel):
     id: UUID
     name: str
     lane: Optional[int] = None
+    lane_label: Optional[str] = None
     stage: Optional[str]
     sector: Optional[str]
     website: Optional[str] = None
@@ -48,6 +49,17 @@ class CompanyOut(BaseModel):
     deep_dive_done: bool = False
     deep_dive_content: Optional[str] = None
     notes: Optional[str] = None
+
+    @model_validator(mode='after')
+    def compute_lane_label(self):
+        LANE_LABELS = {
+            1: "Late-stage / Pre-IPO",
+            2: "Growth-stage (Series C-D)",
+            3: "MNC / Large Indian Corps",
+        }
+        if self.lane is not None:
+            self.lane_label = LANE_LABELS.get(self.lane, f"Lane {self.lane}")
+        return self
 
     class Config:
         from_attributes = True

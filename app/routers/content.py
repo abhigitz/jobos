@@ -213,6 +213,86 @@ Return ONLY valid JSON array:
     return {"generated": len(created_dates), "dates": created_dates}
 
 
+@router.post("/initialize")
+async def initialize_content_calendar(
+    db: AsyncSession = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    """Generate starter content topics for new users."""
+    existing = await db.execute(
+        select(ContentCalendar).where(ContentCalendar.user_id == current_user.id).limit(1)
+    )
+    if existing.scalar_one_or_none():
+        raise HTTPException(status_code=400, detail="Content calendar already initialized")
+
+    prof_res = await db.execute(
+        select(ProfileDNA).where(ProfileDNA.user_id == current_user.id)
+    )
+    profile = prof_res.scalar_one_or_none()
+
+    default_topics = [
+        {"topic": "Career transition lessons learned", "category": "Personal"},
+        {"topic": "Industry trend I'm excited about", "category": "Industry"},
+        {"topic": "Skill I'm currently developing", "category": "Growth"},
+        {"topic": "Professional win worth sharing", "category": "Personal"},
+        {"topic": "Advice for others in similar roles", "category": "Strategy"},
+    ]
+
+    base_date = date.today()
+    for i, item in enumerate(default_topics):
+        content = ContentCalendar(
+            user_id=current_user.id,
+            topic=item["topic"],
+            category=item["category"],
+            scheduled_date=base_date + timedelta(days=i * 2),
+            status="Planned",
+        )
+        db.add(content)
+
+    await db.commit()
+    return {"message": "Content calendar initialized with 5 starter topics", "count": 5}
+
+
+@router.post("/initialize")
+async def initialize_content_calendar(
+    db: AsyncSession = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    """Generate starter content topics for new users."""
+    existing = await db.execute(
+        select(ContentCalendar).where(ContentCalendar.user_id == current_user.id).limit(1)
+    )
+    if existing.scalar_one_or_none():
+        raise HTTPException(status_code=400, detail="Content calendar already initialized")
+
+    prof_res = await db.execute(
+        select(ProfileDNA).where(ProfileDNA.user_id == current_user.id)
+    )
+    profile = prof_res.scalar_one_or_none()
+
+    default_topics = [
+        {"topic": "Career transition lessons learned", "category": "Personal"},
+        {"topic": "Industry trend I'm excited about", "category": "Industry"},
+        {"topic": "Skill I'm currently developing", "category": "Growth"},
+        {"topic": "Professional win worth sharing", "category": "Personal"},
+        {"topic": "Advice for others in similar roles", "category": "Strategy"},
+    ]
+
+    base_date = date.today()
+    for i, item in enumerate(default_topics):
+        content = ContentCalendar(
+            user_id=current_user.id,
+            topic=item["topic"],
+            category=item["category"],
+            scheduled_date=base_date + timedelta(days=i * 2),
+            status="Planned",
+        )
+        db.add(content)
+
+    await db.commit()
+    return {"message": "Content calendar initialized with 5 starter topics", "count": 5}
+
+
 # --- Existing endpoints preserved ---
 
 @router.post("", response_model=ContentOut)

@@ -59,6 +59,7 @@ app.add_middleware(
 )
 
 from .routers import (  # noqa: E402
+    activity,
     analytics,
     auth,
     briefing,
@@ -74,6 +75,7 @@ from .routers import (  # noqa: E402
     telegram,
 )
 
+app.include_router(activity.router, prefix="/api/activity", tags=["activity"])
 app.include_router(auth.router, prefix="/api/auth", tags=["auth"])
 app.include_router(profile.router, prefix="/api/profile", tags=["profile"])
 app.include_router(jobs.router, prefix="/api/jobs", tags=["jobs"])

@@ -6,6 +6,8 @@ import anthropic
 from anthropic import AsyncAnthropic
 from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
 
+from app.utils.json_parser import parse_json_response
+
 logger = logging.getLogger(__name__)
 
 client = AsyncAnthropic()
@@ -37,17 +39,6 @@ async def call_claude(prompt: str, max_tokens: int = 2000) -> str | None:
         raise
     except anthropic.APIError as e:
         logger.error(f"Claude API error: {e}")
-        return None
-
-
-def parse_json_response(text: str | None) -> dict | None:
-    if text is None:
-        return None
-    clean = text.replace("```json", "").replace("```", "").strip()
-    try:
-        return json.loads(clean)
-    except json.JSONDecodeError:
-        logger.error(f"Failed to parse JSON: {clean[:200]}")
         return None
 
 

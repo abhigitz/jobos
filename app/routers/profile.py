@@ -1,6 +1,3 @@
-import json
-import re
-
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -10,25 +7,10 @@ from app.dependencies import get_current_user
 from app.models.profile import ProfileDNA
 from app.schemas.profile import ProfileExtractRequest, ProfileOut, ProfileUpdate
 from app.services.ai_service import call_claude, extract_profile
+from app.utils.json_parser import parse_json_response
 
 
 router = APIRouter()
-
-
-def _extract_json(text: str) -> dict:
-    """Extract JSON from Claude response, handling markdown code blocks."""
-    try:
-        return json.loads(text)
-    except json.JSONDecodeError:
-        pass
-    match = re.search(r'```(?:json)?\s*([\s\S]*?)```', text)
-    if match:
-        return json.loads(match.group(1))
-    start = text.find('{')
-    end = text.rfind('}')
-    if start != -1 and end != -1:
-        return json.loads(text[start:end + 1])
-    raise ValueError("Could not extract JSON from AI response")
 
 
 @router.get("", response_model=ProfileOut)
@@ -116,9 +98,15 @@ RESUME TEXT:
         raw_result = await call_claude(prompt, max_tokens=2000)
         if raw_result is None:
             raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="AI extraction failed")
-        data = _extract_json(raw_result)
-    except (json.JSONDecodeError, ValueError):
-        # Fallback to existing extract_profile
+        data = parse_json_response(raw_result)
+        if data is None:
+            # Fallback to existing extract_profile
+            data = await extract_profile(payload.resume_text)
+        if data is None:
+            raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="AI extraction failed")
+    except HTTPException:
+        raise
+    except Exception:
         data = await extract_profile(payload.resume_text)
         if data is None:
             raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="AI extraction failed")

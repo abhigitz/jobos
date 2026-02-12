@@ -1,6 +1,9 @@
+import logging
 from datetime import date, datetime, timedelta, timezone
 from typing import Any, Optional
 from uuid import UUID
+
+logger = logging.getLogger(__name__)
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
@@ -488,9 +491,16 @@ async def deep_resume_analysis_endpoint(
         "years_of_experience": profile.years_of_experience,
     }
 
-    analysis = await deep_resume_analysis(payload.jd_text, profile.raw_resume_text, profile_dict)
+    try:
+        analysis = await deep_resume_analysis(payload.jd_text, profile.raw_resume_text, profile_dict)
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Deep resume analysis failed: {e}")
+        raise HTTPException(status_code=500, detail=f"Analysis failed: {str(e)[:200]}")
+
     if analysis is None:
-        raise HTTPException(status_code=503, detail="AI analysis temporarily unavailable")
+        raise HTTPException(status_code=502, detail="AI response could not be parsed. Try again.")
 
     # If job_id provided, store deep analysis on the job
     if payload.job_id:

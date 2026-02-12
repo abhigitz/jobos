@@ -117,6 +117,8 @@ RESUME TEXT:
         profile = ProfileDNA(user_id=current_user.id)
         db.add(profile)
 
+    profile.raw_resume_text = payload.resume_text
+
     for key, value in data.items():
         if hasattr(profile, key):
             setattr(profile, key, value)

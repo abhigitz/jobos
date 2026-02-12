@@ -56,7 +56,7 @@ async def telegram_webhook(
     if command == "/help":
         await send_telegram_message(
             chat_id,
-            "/connect email\n/disconnect\n/jd <job description>\n/apply Company | Role | URL | Source\n/status Company | NewStatus\n/pipeline\n/profile <resume>\n/log 3,4,3,y,1,2,y,Company\n/test-evening - Test evening check-in now\n/test-midday - Test midday check now",
+            "/connect email\n/disconnect\n/jd <job description>\n/apply Company | Role | URL | Source\n/status Company | NewStatus\n/pipeline\n/profile <resume>\n/log 3,4,3,y,1,2,y,Company\n/test-evening - Test evening check-in now\n/test-midday - Test midday check now\n/test-morning - Test morning briefing\n/test-content - Test LinkedIn content draft\n/test-review - Test weekly review",
         )
         return {"ok": True}
 
@@ -215,6 +215,21 @@ async def telegram_webhook(
     if command == "/test-midday":
         from app.tasks.midday_check import midday_check_task
         await midday_check_task()
+        return {"ok": True}
+
+    if command == "/test-morning":
+        from app.tasks.morning_briefing import morning_briefing_task
+        await morning_briefing_task()
+        return {"ok": True}
+
+    if command == "/test-content":
+        from app.tasks.linkedin_content import linkedin_content_task
+        await linkedin_content_task()
+        return {"ok": True}
+
+    if command == "/test-review":
+        from app.tasks.weekly_review import weekly_review_task
+        await weekly_review_task()
         return {"ok": True}
 
     await send_telegram_message(chat_id, "Unknown command. Use /help.")

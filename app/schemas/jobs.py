@@ -147,6 +147,7 @@ class JobUpdate(BaseModel):
     cover_letter: Optional[str] = None
     source_portal: Optional[str] = Field(None, max_length=100)
     jd_url: Optional[str] = Field(None, max_length=1000)
+    followup_date: Optional[date] = None
 
     @field_validator("status")
     @classmethod
@@ -208,6 +209,7 @@ class JobOut(BaseModel):
     closed_reason: Optional[str] = None
     last_followup_date: Optional[date] = None
     followup_count: int = 0
+    followup_date: Optional[date] = None
     created_at: datetime
     updated_at: datetime
 

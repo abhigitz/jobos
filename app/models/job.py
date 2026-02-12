@@ -54,6 +54,7 @@ class Job(Base, IDMixin, TimestampMixin):
     notes: Mapped[Optional[list]] = mapped_column(JSONB, server_default='[]', default=list)
     last_followup_date: Mapped[Optional[date]] = mapped_column(Date())
     followup_count: Mapped[int] = mapped_column(Integer, default=0)
+    followup_date: Mapped[Optional[date]] = mapped_column(Date())
 
     __table_args__ = (
         CheckConstraint(

@@ -240,6 +240,40 @@ async def get_stale_jobs(
     return {"stale_jobs": stale_list, "count": len(stale_list)}
 
 
+@router.get("/followups/due")
+async def get_due_followups(
+    days: int = Query(default=7, ge=1, le=30),
+    db: AsyncSession = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    """Get jobs with followups due within N days."""
+    now = datetime.now(timezone.utc)
+    cutoff = now.date() + timedelta(days=days)
+
+    result = await db.execute(
+        select(Job)
+        .where(Job.user_id == current_user.id)
+        .where(Job.is_deleted.is_(False))
+        .where(Job.followup_date.isnot(None))
+        .where(Job.followup_date <= cutoff)
+        .where(Job.status.in_(["Applied", "Interview"]))
+        .order_by(Job.followup_date.asc())
+    )
+    jobs = result.scalars().all()
+
+    return [
+        {
+            "id": str(j.id),
+            "title": j.role_title,
+            "company_name": j.company_name,
+            "followup_date": j.followup_date.isoformat() if j.followup_date else None,
+            "status": j.status,
+            "days_until": (j.followup_date - now.date()).days if j.followup_date else None,
+        }
+        for j in jobs
+    ]
+
+
 @router.get("/followups")
 async def get_followups(
     db: AsyncSession = Depends(get_db),
@@ -746,6 +780,86 @@ async def add_note(
     await db.commit()
     await db.refresh(job)
     return {"notes": job.notes}
+
+
+@router.post("/{job_id}/reanalyze")
+@limiter.limit("20/hour")
+async def reanalyze_job(
+    request: Request,
+    job_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    """Re-analyze a job with current profile/resume."""
+    job = await db.get(Job, job_id)
+    if not job or job.user_id != current_user.id or job.is_deleted:
+        raise HTTPException(status_code=404, detail="Job not found")
+
+    if not job.jd_text:
+        raise HTTPException(status_code=400, detail="No JD text available for re-analysis")
+
+    # Get current profile
+    profile_result = await db.execute(
+        select(ProfileDNA).where(ProfileDNA.user_id == current_user.id)
+    )
+    profile = profile_result.scalar_one_or_none()
+
+    profile_dict: dict[str, Any] = {}
+    if profile is not None:
+        profile_dict = {
+            "full_name": profile.full_name,
+            "positioning_statement": profile.positioning_statement,
+            "target_roles": profile.target_roles,
+            "core_skills": profile.core_skills,
+            "resume_keywords": profile.resume_keywords,
+            "achievements": profile.achievements,
+            "tools_platforms": profile.tools_platforms,
+            "industries": profile.industries,
+            "experience_level": profile.experience_level,
+            "years_of_experience": profile.years_of_experience,
+        }
+
+    # Re-run analysis
+    analysis = await analyze_jd(job.jd_text, profile_dict)
+    if analysis is None:
+        raise HTTPException(status_code=503, detail="AI analysis temporarily unavailable")
+
+    # Replace cover letter signature placeholders with real values
+    settings = get_settings()
+    cover_letter = analysis.get("cover_letter_draft") or analysis.get("cover_letter", "")
+    if cover_letter:
+        candidate_name = profile.full_name if profile and profile.full_name else "Your Name"
+        cover_letter = cover_letter.replace("[CANDIDATE_NAME]", candidate_name)
+        cover_letter = cover_letter.replace("[CANDIDATE_PHONE]", settings.owner_phone or "")
+        cover_letter = cover_letter.replace("[CANDIDATE_LINKEDIN]", settings.owner_linkedin_url or "")
+        cover_letter = cover_letter.replace("\u2014", ", ").replace("\u2013", ", ")
+
+    # Update job with new analysis
+    job.fit_score = analysis.get("fit_score")
+    job.fit_reasoning = analysis.get("fit_reasoning")
+    job.salary_range = analysis.get("salary_range")
+    job.keywords_matched = analysis.get("keywords_matched")
+    job.keywords_missing = analysis.get("keywords_missing")
+    job.cover_letter = cover_letter
+    job.resume_suggestions = analysis.get("resume_suggestions")
+    job.interview_angle = analysis.get("interview_angle")
+    job.b2c_check = analysis.get("b2c_check")
+    job.b2c_reason = analysis.get("b2c_reason")
+    job.updated_at = datetime.now(timezone.utc)
+
+    await log_activity(
+        db, current_user.id, "reanalyzed",
+        f"Re-analyzed job: {job.company_name} - {job.role_title}",
+        related_job_id=job.id,
+    )
+    await db.commit()
+
+    return {
+        "message": "Job re-analyzed successfully",
+        "fit_score": job.fit_score,
+        "keywords_matched": job.keywords_matched,
+        "keywords_missing": job.keywords_missing,
+    }
 
 
 @router.post("/{job_id}/interview")

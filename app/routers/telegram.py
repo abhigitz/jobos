@@ -1,3 +1,4 @@
+import logging
 from datetime import date
 
 from fastapi import APIRouter, Depends, Header, HTTPException
@@ -10,11 +11,13 @@ from app.models.daily_log import DailyLog
 from app.models.job import Job
 from app.models.profile import ProfileDNA
 from app.models.user import User
-from app.routers.jobs import analyze_jd_endpoint
+from app.routers.jobs import analyze_jd_endpoint, save_from_analysis
 from app.routers.profile import extract_profile_from_resume
-from app.schemas.jobs import JDAnalyzeRequest, JobCreate
+from app.schemas.jobs import JDAnalyzeRequest, JobCreate, SaveFromAnalysisRequest
 from app.schemas.profile import ProfileExtractRequest
 from app.services.telegram_service import send_telegram_message
+
+logger = logging.getLogger(__name__)
 
 
 router = APIRouter()
@@ -86,16 +89,60 @@ async def telegram_webhook(
         return {"ok": True}
 
     if command == "/jd":
-        if len(arg) < 100:
-            await send_telegram_message(chat_id, "Please send a full JD (at least 100 characters).")
+        if len(arg) < 50:
+            await send_telegram_message(chat_id, "Please send a full JD (at least 50 characters).\n\nUsage: /jd ")
             return {"ok": True}
-        req = JDAnalyzeRequest(jd_text=arg, jd_url=None)
-        # Call internal endpoint logic directly
-        from app.dependencies import get_current_user as _gc
 
-        # Here we bypass dependency; pass current user and db into helper
-        analysis = await analyze_jd_endpoint(req, db=db, current_user=user)  # type: ignore[arg-type]
-        await send_telegram_message(chat_id, f"ATS score: {analysis['analysis'].get('ats_score')}\nFit: {analysis['analysis'].get('fit_score')}")
+        req = JDAnalyzeRequest(jd_text=arg, jd_url=None)
+        result = await analyze_jd_endpoint(req, db=db, current_user=user)  # type: ignore[arg-type]
+        a = result.get("analysis", {})
+
+        # Auto-save to Tracking (Telegram = quick dirty flow)
+        try:
+            save_req = SaveFromAnalysisRequest(
+                company_name=result.get("company_name", "Unknown"),
+                role_title=result.get("role_title", "Unknown"),
+                jd_text=arg,
+                jd_url=None,
+                fit_score=a.get("fit_score"),
+                ats_score=a.get("ats_score"),
+                fit_reasoning=a.get("fit_reasoning"),
+                salary_range=a.get("salary_range"),
+                keywords_matched=a.get("keywords_matched"),
+                keywords_missing=a.get("keywords_missing"),
+                ai_analysis=a,
+                cover_letter=a.get("cover_letter_draft"),
+                status="Tracking",
+            )
+            await save_from_analysis(save_req, db=db, current_user=user)  # type: ignore[arg-type]
+        except Exception as e:
+            logger.error(f"Telegram /jd auto-save failed: {e}")
+
+        # Build response message
+        lines = [
+            f"Company: {result.get('company_name', 'Unknown')}",
+            f"Role: {result.get('role_title', 'Unknown')}",
+            f"ATS Score: {a.get('ats_score', 'N/A')}",
+            f"Fit Score: {a.get('fit_score', 'N/A')}",
+            "",
+            f"Fit: {a.get('fit_reasoning', 'N/A')}",
+            "",
+            f"Salary: {a.get('salary_range', 'Not specified')}",
+            "",
+            f"Recommendation: {a.get('customize_recommendation', 'N/A')}",
+            "",
+            "Saved to Tracking. View in dashboard.",
+        ]
+        suggestions = a.get("resume_suggestions", [])
+        if suggestions:
+            lines.insert(-2, "")
+            lines.insert(-2, "Resume suggestions:")
+            for s in suggestions[:3]:
+                lines.insert(-2, f"  - {s}")
+        msg = "\n".join(lines)
+        if len(msg) > 4000:
+            msg = msg[:4000] + "\n...(truncated)"
+        await send_telegram_message(chat_id, msg)
         return {"ok": True}
 
     if command == "/apply":
@@ -230,6 +277,11 @@ async def telegram_webhook(
     if command == "/test-review":
         from app.tasks.weekly_review import weekly_review_task
         await weekly_review_task()
+        return {"ok": True}
+
+    if command == "/test-ghost":
+        from app.tasks.auto_ghost import auto_ghost_task
+        await auto_ghost_task()
         return {"ok": True}
 
     await send_telegram_message(chat_id, "Unknown command. Use /help.")

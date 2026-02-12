@@ -15,9 +15,20 @@ from app.models.contact import Contact
 from app.models.interview import Interview
 from app.models.job import Job
 from app.models.profile import ProfileDNA
-from app.schemas.jobs import AddNoteRequest, JDAnalyzeRequest, JobCreate, JobOut, JobUpdate, NoteEntry, PaginatedResponse
+from app.schemas.jobs import (
+    AddNoteRequest,
+    DeepResumeAnalysisRequest,
+    JDAnalyzeRequest,
+    JobCreate,
+    JobOut,
+    JobUpdate,
+    NoteEntry,
+    PaginatedResponse,
+    SaveFromAnalysisRequest,
+)
 from app.services.activity_log import log_activity
-from app.services.ai_service import analyze_jd, call_claude
+from app.config import get_settings
+from app.services.ai_service import analyze_jd, call_claude, deep_resume_analysis
 
 
 router = APIRouter()
@@ -288,8 +299,9 @@ async def analyze_jd_endpoint(
     db: AsyncSession = Depends(get_db),
     current_user=Depends(get_current_user),
 ):
-    if not (100 <= len(payload.jd_text) <= 15000):
-        raise HTTPException(status_code=400, detail="jd_text must be between 100 and 15000 characters")
+    """Analyze a JD against user profile. Returns analysis only, does NOT create a Job."""
+    if not (50 <= len(payload.jd_text) <= 15000):
+        raise HTTPException(status_code=400, detail="jd_text must be between 50 and 15000 characters")
 
     prof_res = await db.execute(select(ProfileDNA).where(ProfileDNA.user_id == current_user.id))
     profile = prof_res.scalar_one_or_none()
@@ -300,6 +312,8 @@ async def analyze_jd_endpoint(
             "positioning_statement": profile.positioning_statement,
             "target_roles": profile.target_roles,
             "core_skills": profile.core_skills,
+            "resume_keywords": profile.resume_keywords,
+            "achievements": profile.achievements,
             "tools_platforms": profile.tools_platforms,
             "industries": profile.industries,
             "experience_level": profile.experience_level,
@@ -310,9 +324,39 @@ async def analyze_jd_endpoint(
     if analysis is None:
         raise HTTPException(status_code=503, detail="AI analysis temporarily unavailable")
 
-    company_name = analysis.get("company_name") or "Unknown Company"
-    role_title = analysis.get("role_title") or "Unknown Role"
+    # Replace cover letter signature placeholders with real values
+    settings = get_settings()
+    cover_letter = analysis.get("cover_letter_draft", "")
+    if cover_letter:
+        candidate_name = profile.full_name if profile and profile.full_name else "Your Name"
+        cover_letter = cover_letter.replace("[CANDIDATE_NAME]", candidate_name)
+        cover_letter = cover_letter.replace("[CANDIDATE_PHONE]", settings.owner_phone or "")
+        cover_letter = cover_letter.replace("[CANDIDATE_LINKEDIN]", settings.owner_linkedin_url or "")
+        # Strip em dashes as safety net
+        cover_letter = cover_letter.replace("\u2014", ", ").replace("\u2013", ", ")
+        analysis["cover_letter_draft"] = cover_letter
 
+    return {
+        "analysis": analysis,
+        "company_name": analysis.get("company_name", "Unknown Company"),
+        "role_title": analysis.get("role_title", "Unknown Role"),
+        "jd_url": payload.jd_url,
+    }
+
+
+@router.post("/save-from-analysis", response_model=JobOut, status_code=201)
+async def save_from_analysis(
+    payload: SaveFromAnalysisRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    """Save a Job from JD analysis. Handles both Tracking and Applied status."""
+    from datetime import date as date_type
+
+    company_name = payload.company_name
+    role_title = payload.role_title
+
+    # Check for existing job with same company + role (dedup)
     existing = await db.execute(
         select(Job).where(
             Job.user_id == current_user.id,
@@ -324,39 +368,122 @@ async def analyze_jd_endpoint(
     existing_job = existing.scalar_one_or_none()
 
     if existing_job:
-        existing_job.fit_score = analysis.get("fit_score")
-        existing_job.ats_score = analysis.get("ats_score")
+        # Update existing job with new analysis
+        existing_job.fit_score = payload.fit_score
+        existing_job.ats_score = payload.ats_score
+        existing_job.fit_reasoning = payload.fit_reasoning
+        existing_job.salary_range = payload.salary_range
         existing_job.jd_text = payload.jd_text
         existing_job.jd_url = payload.jd_url
-        existing_job.keywords_matched = analysis.get("keywords_matched")
-        existing_job.keywords_missing = analysis.get("keywords_missing")
-        existing_job.ai_analysis = analysis
-        existing_job.source_portal = "JD Analysis"
+        existing_job.keywords_matched = payload.keywords_matched
+        existing_job.keywords_missing = payload.keywords_missing
+        existing_job.ai_analysis = payload.ai_analysis
+        existing_job.cover_letter = payload.cover_letter
+        existing_job.source_portal = payload.source_portal or "JD Analysis"
+
+        # Update status if upgrading (Tracking -> Applied)
+        if payload.status == "Applied" and existing_job.status == "Tracking":
+            existing_job.status = "Applied"
+            existing_job.application_channel = payload.application_channel
+            existing_job.applied_date = date_type.today()
+
         job = existing_job
     else:
+        # Create new job
         job = Job(
             user_id=current_user.id,
             company_name=company_name,
             role_title=role_title,
             jd_text=payload.jd_text,
             jd_url=payload.jd_url,
-            status="Tracking",
-            fit_score=analysis.get("fit_score"),
-            ats_score=analysis.get("ats_score"),
-            keywords_matched=analysis.get("keywords_matched"),
-            keywords_missing=analysis.get("keywords_missing"),
-            ai_analysis=analysis,
-            source_portal="JD Analysis",
+            status=payload.status,
+            application_channel=payload.application_channel if payload.status == "Applied" else None,
+            applied_date=date_type.today() if payload.status == "Applied" else None,
+            fit_score=payload.fit_score,
+            ats_score=payload.ats_score,
+            fit_reasoning=payload.fit_reasoning,
+            salary_range=payload.salary_range,
+            keywords_matched=payload.keywords_matched,
+            keywords_missing=payload.keywords_missing,
+            ai_analysis=payload.ai_analysis,
+            cover_letter=payload.cover_letter,
+            source_portal=payload.source_portal or "JD Analysis",
+            notes=[],
         )
         db.add(job)
+
+    # Add system notes for timeline
+    notes = job.notes if job.notes else []
+    notes.append({
+        "text": f"Analyzed. ATS: {payload.ats_score}, Fit: {payload.fit_score}",
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "type": "system",
+    })
+    if payload.status == "Applied":
+        notes.append({
+            "text": f"Applied via {payload.application_channel or 'unknown'}",
+            "created_at": datetime.now(timezone.utc).isoformat(),
+            "type": "status_change",
+        })
+    job.notes = notes
+    flag_modified(job, "notes")
 
     await db.commit()
     await db.refresh(job)
 
-    await log_activity(db, current_user.id, "job_analyzed", f"Analyzed JD: {company_name} - {role_title}", related_job_id=job.id)
+    await log_activity(
+        db, current_user.id, "job_analyzed",
+        f"Saved JD analysis: {company_name} - {role_title} ({payload.status})",
+        related_job_id=job.id,
+    )
     await db.commit()
 
-    return {"analysis": analysis, "job_id": str(job.id)}
+    return JobOut.model_validate(job)
+
+
+@router.post("/deep-resume-analysis")
+async def deep_resume_analysis_endpoint(
+    payload: DeepResumeAnalysisRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    """Deep resume vs JD analysis with specific rewrite suggestions."""
+    if not (100 <= len(payload.jd_text) <= 15000):
+        raise HTTPException(status_code=400, detail="jd_text must be between 100 and 15000 characters")
+
+    prof_res = await db.execute(select(ProfileDNA).where(ProfileDNA.user_id == current_user.id))
+    profile = prof_res.scalar_one_or_none()
+    if profile is None or not profile.raw_resume_text:
+        raise HTTPException(status_code=400, detail="No resume text found. Upload your resume to profile first.")
+
+    profile_dict: dict[str, Any] = {
+        "full_name": profile.full_name,
+        "positioning_statement": profile.positioning_statement,
+        "target_roles": profile.target_roles,
+        "core_skills": profile.core_skills,
+        "resume_keywords": profile.resume_keywords,
+        "achievements": profile.achievements,
+        "tools_platforms": profile.tools_platforms,
+        "industries": profile.industries,
+        "experience_level": profile.experience_level,
+        "years_of_experience": profile.years_of_experience,
+    }
+
+    analysis = await deep_resume_analysis(payload.jd_text, profile.raw_resume_text, profile_dict)
+    if analysis is None:
+        raise HTTPException(status_code=503, detail="AI analysis temporarily unavailable")
+
+    # If job_id provided, store deep analysis on the job
+    if payload.job_id:
+        job = await db.get(Job, payload.job_id)
+        if job and job.user_id == current_user.id and not job.is_deleted:
+            existing_ai = job.ai_analysis or {}
+            existing_ai["deep_resume_analysis"] = analysis
+            job.ai_analysis = existing_ai
+            flag_modified(job, "ai_analysis")
+            await db.commit()
+
+    return {"analysis": analysis, "job_id": payload.job_id}
 
 
 @router.get("/search")
@@ -446,7 +573,25 @@ async def update_job(
 
     # Default closed_reason when status changes to 'Closed'
     if update_data.get("status") == "Closed" and job.closed_reason is None:
-        job.closed_reason = "No Response"
+        job.closed_reason = "Dropped"
+
+    # Auto-note on status change for timeline
+    new_status = update_data.get("status")
+    if new_status and new_status != old_status:
+        existing_notes = job.notes if job.notes is not None else []
+        note_text = f"Status changed: {old_status} to {new_status}"
+        if new_status == "Applied" and update_data.get("application_channel"):
+            note_text = f"Applied via {update_data['application_channel']}"
+        elif new_status == "Closed":
+            reason = update_data.get("closed_reason") or job.closed_reason or "Dropped"
+            note_text = f"Closed: {reason}"
+        existing_notes.append({
+            "text": note_text,
+            "created_at": datetime.now(timezone.utc).isoformat(),
+            "type": "status_change",
+        })
+        job.notes = existing_notes
+        flag_modified(job, "notes")
 
     await db.commit()
     await db.refresh(job)

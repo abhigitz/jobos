@@ -18,6 +18,8 @@ class Settings(BaseSettings):
     frontend_url: str = "http://localhost:3000"
     owner_telegram_chat_id: int = 0
     owner_email: str = ""
+    owner_phone: str = ""
+    owner_linkedin_url: str = ""
 
     class Config:
         env_file = ".env"

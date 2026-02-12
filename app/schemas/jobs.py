@@ -10,6 +10,53 @@ class JDAnalyzeRequest(BaseModel):
     jd_url: Optional[str] = Field(None, max_length=1000)
 
 
+class SaveFromAnalysisRequest(BaseModel):
+    """Create a Job from JD analysis results. Called after user sees analysis and decides."""
+    company_name: str = Field(..., max_length=255)
+    role_title: str = Field(..., max_length=255)
+    jd_text: str = Field(..., min_length=50, max_length=15000)
+    jd_url: Optional[str] = Field(None, max_length=1000)
+    source_portal: str = Field("JD Analysis", max_length=100)
+    status: str = Field("Tracking")
+    application_channel: Optional[str] = Field(None, max_length=50)
+    # Analysis results
+    fit_score: Optional[float] = None
+    ats_score: Optional[float] = None
+    fit_reasoning: Optional[str] = None
+    salary_range: Optional[str] = None
+    keywords_matched: Optional[list[str]] = None
+    keywords_missing: Optional[list[str]] = None
+    ai_analysis: Optional[dict] = None
+    cover_letter: Optional[str] = None
+
+    @field_validator("status")
+    @classmethod
+    def validate_status(cls, v: str) -> str:
+        if v not in ("Tracking", "Applied"):
+            raise ValueError("status must be 'Tracking' or 'Applied'")
+        return v
+
+    @field_validator("fit_score")
+    @classmethod
+    def validate_fit_score(cls, v: Optional[float]) -> Optional[float]:
+        if v is not None and not (0.0 <= v <= 10.0):
+            raise ValueError("fit_score must be between 0 and 10")
+        return v
+
+    @field_validator("ats_score")
+    @classmethod
+    def validate_ats_score(cls, v: Optional[float]) -> Optional[float]:
+        if v is not None and not (0 <= v <= 100):
+            raise ValueError("ats_score must be between 0 and 100")
+        return v
+
+
+class DeepResumeAnalysisRequest(BaseModel):
+    """Deep resume vs JD analysis. Triggered by explicit user request."""
+    jd_text: str = Field(..., min_length=100, max_length=15000)
+    job_id: Optional[str] = None
+
+
 class NoteEntry(BaseModel):
     text: str
     created_at: str
@@ -85,6 +132,8 @@ class JobUpdate(BaseModel):
     referral_contact: Optional[str] = Field(None, max_length=255)
     application_channel: Optional[str] = Field(None, max_length=50)
     closed_reason: Optional[str] = Field(None, max_length=50)
+    fit_reasoning: Optional[str] = None
+    salary_range: Optional[str] = Field(None, max_length=100)
     cover_letter: Optional[str] = None
     source_portal: Optional[str] = Field(None, max_length=100)
     jd_url: Optional[str] = Field(None, max_length=1000)
@@ -129,6 +178,8 @@ class JobOut(BaseModel):
     keywords_matched: Optional[list[str]] = None
     keywords_missing: Optional[list[str]] = None
     ai_analysis: Optional[dict] = None
+    fit_reasoning: Optional[str] = None
+    salary_range: Optional[str] = None
     applied_date: Optional[date] = None
     interview_date: Optional[datetime] = None
     interview_type: Optional[str] = None

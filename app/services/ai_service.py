@@ -65,22 +65,96 @@ CANDIDATE PROFILE:
 JOB DESCRIPTION:
 {jd_text}
 
-Return ONLY valid JSON (no markdown, no backticks):
+Return ONLY valid JSON (no markdown, no backticks, no extra text):
 {{
   "b2c_check": true,
-  "b2c_reason": "...",
+  "b2c_reason": "",
   "ats_score": 75,
   "fit_score": 7.5,
+  "fit_reasoning": "3-4 sentences explaining this score. Reference specific skill matches, domain fit, seniority alignment, and red flags. Be honest about gaps.",
+  "salary_range": "XX-YY LPA",
   "keywords_matched": ["keyword1", "keyword2"],
   "keywords_missing": ["keyword3"],
+  "resume_suggestions": ["max 3 specific actionable suggestions referencing exact resume sections"],
+  "resume_suggestion_impact": "high or medium or low or none",
   "customize_recommendation": "Send master resume" or "Make 2-3 tweaks: ..." or "Needs deep customization",
-  "cover_letter_draft": "120-word draft...",
+  "cover_letter_draft": "Full 250-350 word cover letter. Structure: Subject line, Dear [name if in JD else Hiring Manager], Para 1 (why this role), Para 2 (2-3 achievements with numbers), Para 3 (closing). End with signature block using exact placeholders: [CANDIDATE_NAME] then [CANDIDATE_PHONE] then [CANDIDATE_LINKEDIN] each on new lines.",
   "interview_angle": "Key story to prepare...",
-  "company_name": "extracted from JD",
-  "role_title": "extracted from JD"
-}}"""
+  "company_name": "extracted from JD text",
+  "role_title": "extracted from JD text",
+  "hiring_manager": "name if explicitly in JD, else Hiring Manager"
+}}
 
-    result = await call_claude(prompt, max_tokens=2000)
+RULES:
+- resume_suggestions: maximum 3 items. Each must reference a specific section/bullet. If ATS > 85, say "Resume is well-matched for this role" and return empty array.
+- resume_suggestion_impact: "high" if ATS would improve 10%+, "medium" 5-10%, "low" <5%, "none" if already strong.
+- salary_range: estimate based on role title, seniority, company type, Bangalore market. Use "Unable to estimate" if not enough info.
+- cover_letter_draft: Do NOT invent contact details. Use placeholders [CANDIDATE_NAME], [CANDIDATE_PHONE], [CANDIDATE_LINKEDIN] exactly as shown. If no hiring manager name is explicitly in the JD, use "Dear Hiring Manager". NEVER guess names.
+- hiring_manager: Return the name ONLY if explicitly found in the JD text. Otherwise return "Hiring Manager".
+- Never use the em dash character anywhere in your response. Use commas, periods, or regular hyphens instead.
+- fit_reasoning must be specific, not generic. Reference actual skills and requirements from the JD."""
+
+    result = await call_claude(prompt, max_tokens=4000)
+    parsed = parse_json_response(result)
+
+    # Safety net: strip em dashes from all string values
+    if parsed:
+        for key, value in parsed.items():
+            if isinstance(value, str):
+                parsed[key] = value.replace("\u2014", ", ").replace("\u2013", ", ")
+
+    return parsed
+
+
+async def deep_resume_analysis(jd_text: str, resume_text: str, profile: dict[str, Any]) -> dict | None:
+    """Deep resume vs JD analysis with specific rewrite suggestions."""
+    level = profile.get("experience_level", "Mid")
+    level_hint = LEVEL_CONTEXT.get(level, LEVEL_CONTEXT["Mid"])
+
+    prompt = f"""You are an expert ATS resume analyst.
+
+EVALUATION CONTEXT: {level_hint}
+
+CANDIDATE RESUME:
+{resume_text[:8000]}
+
+JOB DESCRIPTION:
+{jd_text}
+
+Analyze how well this resume matches the JD. Return ONLY valid JSON:
+{{
+  "overall_match_score": 75,
+  "section_scores": {{
+    "skills_match": 80,
+    "experience_relevance": 70,
+    "education_fit": 60,
+    "keywords_coverage": 75
+  }},
+  "ats_pass_likelihood": "High",
+  "critical_gaps": ["gap1", "gap2"],
+  "rewrite_suggestions": [
+    {{
+      "section": "Experience - Company Name",
+      "current": "exact current bullet text from resume",
+      "suggested": "improved version with metrics and keywords",
+      "reason": "1 sentence on why this improves fit",
+      "priority": "must-change"
+    }}
+  ],
+  "keywords_to_add": ["keyword1"],
+  "keywords_present": ["keyword2"],
+  "executive_summary": "3-4 sentence overview of resume-JD fit"
+}}
+
+RULES:
+- Maximum 5 rewrite_suggestions, ranked by impact (must-change first, then should-change, then nice-to-have)
+- Rewrites must be factually defensible. Never invent metrics or experiences not in the resume.
+- These are SUGGESTIONS only, clearly marked as such.
+- priority values: "must-change", "should-change", "nice-to-have"
+- Never use the em dash character. Use commas, periods, or hyphens.
+- If resume is already a strong match, return 0-1 suggestions and say so in executive_summary."""
+
+    result = await call_claude(prompt, max_tokens=4000)
     return parse_json_response(result)
 
 

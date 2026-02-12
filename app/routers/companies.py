@@ -6,7 +6,7 @@ from app.database import get_db
 from app.dependencies import get_current_user
 from app.models.company import Company
 from app.models.profile import ProfileDNA
-from app.schemas.companies import CompanyCreate, CompanyOut, CompanySearchResult, CompanyUpdate
+from app.schemas.companies import CompanyCreate, CompanyOut, CompanyQuickCreate, CompanySearchResult, CompanyUpdate
 from app.services.ai_service import generate_company_deep_dive
 
 
@@ -55,17 +55,58 @@ async def search_companies(
     db: AsyncSession = Depends(get_db),
     current_user=Depends(get_current_user),
 ):
-    """Search companies by name. Returns top 5 matches."""
-    result = await db.execute(
-        select(Company)
-        .where(
-            Company.user_id == current_user.id,
-            Company.name.ilike(f"%{q}%"),
+    """Search companies by name. Uses pg_trgm fuzzy matching with ILIKE fallback."""
+    try:
+        # Try trigram similarity search (requires pg_trgm extension)
+        result = await db.execute(
+            select(Company)
+            .where(
+                Company.user_id == current_user.id,
+                func.similarity(Company.name, q) > 0.2,
+            )
+            .order_by(func.similarity(Company.name, q).desc())
+            .limit(5)
         )
-        .limit(5)
-    )
-    companies = result.scalars().all()
+        companies = result.scalars().all()
+    except Exception:
+        # Fallback to ILIKE if pg_trgm not available
+        result = await db.execute(
+            select(Company)
+            .where(
+                Company.user_id == current_user.id,
+                Company.name.ilike(f"%{q}%"),
+            )
+            .order_by(Company.name)
+            .limit(5)
+        )
+        companies = result.scalars().all()
+
     return [CompanySearchResult.model_validate(c) for c in companies]
+
+
+@router.post("/quick-create", response_model=CompanyOut, status_code=201)
+async def quick_create_company(
+    payload: CompanyQuickCreate,
+    db: AsyncSession = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    """Quick-create company with minimal fields. Returns existing if name matches."""
+    existing = await db.execute(
+        select(Company).where(
+            Company.user_id == current_user.id,
+            func.lower(Company.name) == func.lower(payload.name),
+        )
+    )
+    existing_company = existing.scalar_one_or_none()
+    if existing_company:
+        # Return existing instead of error (intentional for JD analysis flow)
+        return CompanyOut.model_validate(existing_company)
+
+    company = Company(user_id=current_user.id, **payload.model_dump())
+    db.add(company)
+    await db.commit()
+    await db.refresh(company)
+    return CompanyOut.model_validate(company)
 
 
 @router.get("/{company_id}", response_model=CompanyOut)

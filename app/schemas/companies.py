@@ -15,6 +15,14 @@ class CompanyCreate(BaseModel):
     notes: Optional[str] = None
 
 
+class CompanyQuickCreate(BaseModel):
+    """Minimal company creation from JD analysis flow."""
+    name: str = Field(..., max_length=255)
+    lane: int = Field(2, ge=1, le=3)
+    sector: Optional[str] = Field(None, max_length=100)
+    website: Optional[str] = Field(None, max_length=500)
+
+
 class CompanyUpdate(BaseModel):
     lane: Optional[int] = None
     stage: Optional[str] = None

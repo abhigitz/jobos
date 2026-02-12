@@ -33,6 +33,8 @@ class Job(Base, IDMixin, TimestampMixin):
     keywords_matched: Mapped[list[str] | None] = mapped_column(ARRAY(String))
     keywords_missing: Mapped[list[str] | None] = mapped_column(ARRAY(String))
     ai_analysis: Mapped[dict | None] = mapped_column(JSONB)
+    fit_reasoning: Mapped[str | None] = mapped_column(Text)
+    salary_range: Mapped[str | None] = mapped_column(String(100))
     applied_date: Mapped[date | None] = mapped_column(Date())
     interview_date: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     interview_type: Mapped[str | None] = mapped_column(String(50))

@@ -16,6 +16,7 @@ def register_jobs() -> None:
     from app.tasks.morning_briefing import morning_briefing_task
     from app.tasks.linkedin_content import linkedin_content_task
     from app.tasks.weekly_review import weekly_review_task
+    from app.tasks.auto_ghost import auto_ghost_task
 
     # All times in UTC. Railway runs UTC.
 
@@ -64,9 +65,18 @@ def register_jobs() -> None:
         misfire_grace_time=300,
     )
 
+    # 8:25 AM IST = 2:55 AM UTC, Mon-Sat (runs before morning briefing)
+    scheduler.add_job(
+        auto_ghost_task,
+        CronTrigger(hour=2, minute=55, day_of_week="mon-sat"),
+        id="auto_ghost",
+        replace_existing=True,
+        misfire_grace_time=300,
+    )
+
     logger.info(
         "Scheduler jobs registered: "
-        "morning (03:00 UTC), midday (08:30 UTC), "
+        "auto_ghost (02:55 UTC), morning (03:00 UTC), midday (08:30 UTC), "
         "evening (13:00 UTC), linkedin (13:30 UTC), "
         "weekly (Sun 03:30 UTC)"
     )

@@ -213,7 +213,7 @@ Return ONLY valid JSON array:
 
 # --- Existing endpoints preserved ---
 
-@router.post("/", response_model=ContentOut)
+@router.post("", response_model=ContentOut)
 async def create_content(
     payload: ContentCreate,
     db: AsyncSession = Depends(get_db),

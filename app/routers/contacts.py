@@ -42,7 +42,7 @@ async def list_contacts(
     return [ContactOut.model_validate(c) for c in rows]
 
 
-@router.post("/", response_model=ContactOut)
+@router.post("", response_model=ContactOut)
 async def create_contact(
     payload: ContactCreate,
     db: AsyncSession = Depends(get_db),

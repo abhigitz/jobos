@@ -26,7 +26,7 @@ async def list_companies(
     return [CompanyOut.model_validate(c) for c in rows]
 
 
-@router.post("/", response_model=CompanyOut)
+@router.post("", response_model=CompanyOut)
 async def create_company(
     payload: CompanyCreate,
     db: AsyncSession = Depends(get_db),

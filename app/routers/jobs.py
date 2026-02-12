@@ -96,7 +96,7 @@ async def list_jobs(
     return PaginatedResponse(items=[JobOut.model_validate(i) for i in items], total=total, page=page, per_page=per_page, pages=pages)
 
 
-@router.post("/", response_model=JobOut, status_code=201)
+@router.post("", response_model=JobOut, status_code=201)
 async def create_job(
     payload: JobCreate,
     db: AsyncSession = Depends(get_db),

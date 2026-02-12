@@ -161,7 +161,7 @@ class JobUpdate(BaseModel):
     @model_validator(mode='after')
     def default_closed_reason(self):
         if self.status == 'Closed' and self.closed_reason is None:
-            self.closed_reason = 'No Response'
+            self.closed_reason = 'Dropped'
         return self
 
 

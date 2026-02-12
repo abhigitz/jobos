@@ -24,6 +24,11 @@ class Settings(BaseSettings):
     adzuna_app_id: str = ""
     adzuna_api_key: str = ""
 
+    # AI Model Configuration
+    ai_model_default: str = "claude-sonnet-4-20250514"
+    ai_model_deep: str = "claude-sonnet-4-20250514"
+    ai_model_content: str = "claude-sonnet-4-20250514"
+
     class Config:
         env_file = ".env"
         env_file_encoding = "utf-8"

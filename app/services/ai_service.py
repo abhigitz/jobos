@@ -6,11 +6,22 @@ import anthropic
 from anthropic import AsyncAnthropic
 from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
 
+from app.config import get_settings
 from app.utils.json_parser import parse_json_response
 
 logger = logging.getLogger(__name__)
 
 client = AsyncAnthropic()
+
+
+def _get_model(task_type: str = "default") -> str:
+    settings = get_settings()
+    model_map = {
+        "default": settings.ai_model_default,
+        "deep": settings.ai_model_deep,
+        "content": settings.ai_model_content,
+    }
+    return model_map.get(task_type, settings.ai_model_default)
 
 
 LEVEL_CONTEXT = {
@@ -27,10 +38,10 @@ LEVEL_CONTEXT = {
     wait=wait_exponential(multiplier=1, min=2, max=10),
     retry=retry_if_exception_type((anthropic.RateLimitError, anthropic.InternalServerError)),
 )
-async def call_claude(prompt: str, max_tokens: int = 2000) -> str | None:
+async def call_claude(prompt: str, max_tokens: int = 2000, task_type: str = "default") -> str | None:
     try:
         message = await client.messages.create(
-            model="claude-sonnet-4-20250514",
+            model=_get_model(task_type),
             max_tokens=max_tokens,
             messages=[{"role": "user", "content": prompt}],
         )
@@ -145,7 +156,7 @@ RULES:
 - Never use the em dash character. Use commas, periods, or hyphens.
 - If resume is already a strong match, return 0-1 suggestions and say so in executive_summary."""
 
-    result = await call_claude(prompt, max_tokens=4000)
+    result = await call_claude(prompt, max_tokens=4000, task_type="deep")
     return parse_json_response(result)
 
 
@@ -189,7 +200,7 @@ End with a question or call-to-action.
 No hashtags. No emojis in the first line.
 Return ONLY the post text, nothing else."""
 
-    return await call_claude(prompt, max_tokens=500)
+    return await call_claude(prompt, max_tokens=500, task_type="content")
 
 
 async def generate_company_deep_dive(company_name: str, sector: str | None, profile: dict[str, Any]) -> str | None:
@@ -230,7 +241,7 @@ Include:
 
 Keep it concise. Use bullet points. Under 800 words."""
 
-    return await call_claude(prompt, max_tokens=1500)
+    return await call_claude(prompt, max_tokens=1500, task_type="content")
 
 
 async def analyze_jd_patterns(jd_texts: list[str], resume_keywords: list[str]) -> dict | None:
@@ -334,7 +345,7 @@ Also include:
 Format as a readable digest. Be specific with names and dates.
 Mark each company as 🟢 (actively hiring), 🟡 (stable), or 🔴 (freezing/laying off)."""
 
-    return await call_claude(prompt, max_tokens=4000)
+    return await call_claude(prompt, max_tokens=4000, task_type="content")
 
 
 async def generate_content_topics(profile: dict[str, Any]) -> list[dict[str, str]] | None:
@@ -350,7 +361,7 @@ Return ONLY valid JSON:
   ]
 }}"""
 
-    result = await call_claude(prompt, max_tokens=1000)
+    result = await call_claude(prompt, max_tokens=1000, task_type="content")
     data = parse_json_response(result)
     if not data:
         return None
@@ -367,7 +378,7 @@ If activity is low (0 applications for 2+ days): firm but encouraging escalation
 If activity is decent: quick encouragement + 1 actionable task for next 2 hours.
 Keep it under 200 words."""
 
-    return await call_claude(prompt, max_tokens=400)
+    return await call_claude(prompt, max_tokens=400, task_type="content")
 
 
 async def generate_weekly_review(data: dict[str, Any]) -> str | None:
@@ -385,4 +396,4 @@ Include:
 
 Be direct and actionable. Under 600 words."""
 
-    return await call_claude(prompt, max_tokens=1200)
+    return await call_claude(prompt, max_tokens=1200, task_type="content")

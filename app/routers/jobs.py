@@ -605,6 +605,16 @@ async def update_job(
 
     old_status = job.status
     update_data = payload.model_dump(exclude_unset=True)
+
+    # Map old closed_reason values to standardized ones
+    if "closed_reason" in update_data and update_data["closed_reason"]:
+        REASON_MAP = {"No Response": "Dropped", "Withdrawn": "Not Interested"}
+        VALID_CLOSED_REASONS = ["Rejected", "Dropped", "Ghosted", "Not Interested"]
+        reason = REASON_MAP.get(update_data["closed_reason"], update_data["closed_reason"])
+        if reason not in VALID_CLOSED_REASONS:
+            raise HTTPException(status_code=400, detail=f"Invalid closed_reason. Must be one of: {VALID_CLOSED_REASONS}")
+        update_data["closed_reason"] = reason
+
     for field, value in update_data.items():
         setattr(job, field, value)
 

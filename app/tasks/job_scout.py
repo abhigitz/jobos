@@ -8,7 +8,7 @@ logger = logging.getLogger(__name__)
 
 
 async def job_scout_task() -> None:
-    """Runs 2x daily (6 AM + 6 PM IST). Discovers and scores new jobs."""
+    """Runs daily at 8:00 AM IST. Discovers and scores new jobs."""
     settings = get_settings()
 
     if not settings.owner_email:

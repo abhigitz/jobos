@@ -153,24 +153,30 @@ async def list_resumes(
     current_user=Depends(get_current_user),
 ):
     """List all resume versions for the current user."""
-    rows = (
-        await db.execute(
-            select(ResumeFile)
-            .where(ResumeFile.user_id == current_user.id)
-            .order_by(ResumeFile.version.desc())
-        )
-    ).scalars().all()
-    return [
-        {
-            "id": str(r.id),
-            "filename": r.filename,
-            "file_size": r.file_size,
-            "version": r.version,
-            "is_primary": r.is_primary,
-            "created_at": r.created_at.isoformat(),
-        }
-        for r in rows
-    ]
+    try:
+        rows = (
+            await db.execute(
+                select(ResumeFile)
+                .where(ResumeFile.user_id == current_user.id)
+                .order_by(ResumeFile.version.desc())
+            )
+        ).scalars().all()
+        return [
+            {
+                "id": str(r.id),
+                "filename": r.filename,
+                "file_size": r.file_size,
+                "version": r.version,
+                "is_primary": r.is_primary,
+                "created_at": r.created_at.isoformat(),
+            }
+            for r in rows
+        ]
+    except ProgrammingError as e:
+        err_msg = str(e.orig) if hasattr(e, "orig") and e.orig else str(e)
+        if "does not exist" in err_msg or "resume_files" in err_msg:
+            return []
+        raise
 
 
 @router.get("/{resume_id}/download")

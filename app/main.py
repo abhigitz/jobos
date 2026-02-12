@@ -39,16 +39,17 @@ async def lifespan(app: FastAPI):
 
 
 class DebugResumeMiddleware(BaseHTTPMiddleware):
-    """Log when POST /api/resume/upload reaches the app (H2/H5: infra vs app 503)."""
+    """Log resume-related requests for debugging."""
     async def dispatch(self, request: Request, call_next):  # type: ignore[override]
-        if request.method == "POST" and "/api/resume" in request.url.path and "upload" in request.url.path:
-            logger.info("[DEBUG] POST resume/upload received hypothesis=H2,H5 path=%s", request.url.path)
+        path = request.url.path
+        if "/api/resume" in path:
+            logger.info("[DEBUG] resume request method=%s path=%s", request.method, path)
             try:
                 from pathlib import Path
                 import json, time
                 _p = Path(__file__).resolve().parent.parent / ".cursor" / "debug.log"
                 with open(_p, "a") as f:
-                    f.write(json.dumps({"id":"resume_upload_req","timestamp":time.time()*1000,"location":"main.py:middleware","message":"POST resume/upload received","data":{"path":request.url.path},"hypothesisId":"H2,H5"}) + "\n")
+                    f.write(json.dumps({"id":"resume_req","timestamp":time.time()*1000,"method":request.method,"path":path}) + "\n")
             except Exception:
                 pass
         return await call_next(request)

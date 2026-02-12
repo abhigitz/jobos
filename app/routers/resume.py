@@ -148,11 +148,13 @@ async def upload_resume(
 
 
 @router.get("")
+@router.get("/")
 async def list_resumes(
     db: AsyncSession = Depends(get_db),
     current_user=Depends(get_current_user),
 ):
     """List all resume versions for the current user."""
+    _dbg("list_resumes_entry", {"user_id": str(current_user.id)}, "LIST")
     try:
         rows = (
             await db.execute(
@@ -161,7 +163,7 @@ async def list_resumes(
                 .order_by(ResumeFile.version.desc())
             )
         ).scalars().all()
-        return [
+        out = [
             {
                 "id": str(r.id),
                 "filename": r.filename,
@@ -172,10 +174,16 @@ async def list_resumes(
             }
             for r in rows
         ]
+        _dbg("list_resumes_ok", {"count": len(out)}, "LIST")
+        return out
     except ProgrammingError as e:
         err_msg = str(e.orig) if hasattr(e, "orig") and e.orig else str(e)
         if "does not exist" in err_msg or "resume_files" in err_msg:
+            _dbg("list_resumes_table_missing", {"err": err_msg[:100]}, "LIST")
             return []
+        raise
+    except Exception as e:
+        _dbg("list_resumes_err", {"error": str(e)[:200], "type": type(e).__name__}, "LIST")
         raise
 
 

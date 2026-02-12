@@ -39,7 +39,14 @@ class TrailingSlashMiddleware(BaseHTTPMiddleware):
         return await call_next(request)
 
 
+from slowapi import _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
+from app.dependencies import limiter
+
 app = FastAPI(title="JobOS API", version="0.2.0", lifespan=lifespan, redirect_slashes=False)
+
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 app.add_middleware(TrailingSlashMiddleware)
 

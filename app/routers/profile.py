@@ -1,8 +1,9 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
+from app.dependencies import limiter
 from app.dependencies import get_current_user
 from app.models.profile import ProfileDNA
 from app.schemas.profile import ProfileExtractRequest, ProfileOut, ProfileUpdate
@@ -67,7 +68,9 @@ async def patch_profile(
 
 
 @router.post("/extract", response_model=dict)
+@limiter.limit("50/hour")
 async def extract_profile_from_resume(
+    request: Request,
     payload: ProfileExtractRequest,
     db: AsyncSession = Depends(get_db),
     current_user=Depends(get_current_user),

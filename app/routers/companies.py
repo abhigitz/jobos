@@ -1,9 +1,9 @@
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
-from app.dependencies import get_current_user
+from app.dependencies import get_current_user, limiter
 from app.models.company import Company
 from app.models.profile import ProfileDNA
 from app.schemas.companies import CompanyCreate, CompanyOut, CompanyQuickCreate, CompanySearchResult, CompanyUpdate
@@ -156,7 +156,8 @@ async def delete_company(
 
 
 @router.post("/{company_id}/deep-dive")
-async def company_deep_dive(company_id: str, db: AsyncSession = Depends(get_db), current_user=Depends(get_current_user)):
+@limiter.limit("50/hour")
+async def company_deep_dive(request: Request, company_id: str, db: AsyncSession = Depends(get_db), current_user=Depends(get_current_user)):
     company = await db.get(Company, company_id)
     if company is None or company.user_id != current_user.id:
         raise HTTPException(status_code=404, detail="Company not found")

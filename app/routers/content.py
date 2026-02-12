@@ -2,13 +2,13 @@ import json
 from datetime import date, timedelta
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
 from sqlalchemy import and_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
-from app.dependencies import get_current_user
+from app.dependencies import get_current_user, limiter
 from app.models.content import ContentCalendar
 from app.models.profile import ProfileDNA
 from app.schemas.content import ContentCreate, ContentOut, ContentUpdate
@@ -124,7 +124,9 @@ async def delete_calendar_item(
 
 
 @router.post("/generate-batch")
+@limiter.limit("50/hour")
 async def generate_batch(
+    request: Request,
     payload: GenerateBatchRequest,
     db: AsyncSession = Depends(get_db),
     current_user=Depends(get_current_user),
@@ -246,7 +248,9 @@ async def update_content_item(
 
 
 @router.post("/generate-draft")
+@limiter.limit("50/hour")
 async def generate_draft(
+    request: Request,
     payload: ContentCreate,
     db: AsyncSession = Depends(get_db),
     current_user=Depends(get_current_user),

@@ -1,5 +1,8 @@
 from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from jose import JWTError, jwt
+from slowapi import Limiter
+from slowapi.util import get_remote_address
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
@@ -8,6 +11,24 @@ from .auth.jwt_handler import verify_token
 from .config import get_settings
 from .models.user import User
 
+
+def _get_user_id_from_request(request: Request) -> str:
+    """Extract user_id from JWT for rate limiting, fallback to IP."""
+    settings = get_settings()
+    auth_header = request.headers.get("Authorization", "")
+    if auth_header.startswith("Bearer "):
+        token = auth_header.split(" ", 1)[1]
+        try:
+            payload = jwt.decode(token, settings.jwt_secret_key, algorithms=["HS256"])
+            user_id = payload.get("sub")
+            if user_id:
+                return f"user:{user_id}"
+        except JWTError:
+            pass
+    return f"ip:{get_remote_address(request)}"
+
+
+limiter = Limiter(key_func=_get_user_id_from_request)
 
 security = HTTPBearer()
 security_optional = HTTPBearer(auto_error=False)

@@ -5,7 +5,7 @@ from uuid import UUID
 
 logger = logging.getLogger(__name__)
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, Field
 from sqlalchemy import and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -29,6 +29,7 @@ from app.schemas.jobs import (
     PaginatedResponse,
     SaveFromAnalysisRequest,
 )
+from app.dependencies import limiter
 from app.services.activity_log import log_activity
 from app.config import get_settings
 from app.services.ai_service import analyze_jd, call_claude, deep_resume_analysis
@@ -297,7 +298,9 @@ async def get_followups(
 
 
 @router.post("/analyze-jd")
+@limiter.limit("50/hour")
 async def analyze_jd_endpoint(
+    request: Request,
     payload: JDAnalyzeRequest,
     db: AsyncSession = Depends(get_db),
     current_user=Depends(get_current_user),
@@ -472,7 +475,9 @@ async def save_from_analysis(
 
 
 @router.post("/deep-resume-analysis")
+@limiter.limit("50/hour")
 async def deep_resume_analysis_endpoint(
+    request: Request,
     payload: DeepResumeAnalysisRequest,
     db: AsyncSession = Depends(get_db),
     current_user=Depends(get_current_user),
@@ -841,7 +846,9 @@ async def log_debrief(
 
 
 @router.get("/{job_id}/prep")
+@limiter.limit("50/hour")
 async def get_interview_prep(
+    request: Request,
     job_id: str,
     db: AsyncSession = Depends(get_db),
     current_user=Depends(get_current_user),

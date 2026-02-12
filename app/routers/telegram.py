@@ -1,7 +1,7 @@
 import logging
 from datetime import date
 
-from fastapi import APIRouter, Depends, Header, HTTPException
+from fastapi import APIRouter, Depends, Header, HTTPException, Request
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -31,6 +31,7 @@ async def _get_user_by_chat(db: AsyncSession, chat_id: int):
 
 @router.post("/webhook")
 async def telegram_webhook(
+    request: Request,
     payload: dict,
     x_telegram_bot_api_secret_token: str = Header(None),
     db: AsyncSession = Depends(get_db),
@@ -94,7 +95,7 @@ async def telegram_webhook(
             return {"ok": True}
 
         req = JDAnalyzeRequest(jd_text=arg, jd_url=None)
-        result = await analyze_jd_endpoint(req, db=db, current_user=user)  # type: ignore[arg-type]
+        result = await analyze_jd_endpoint(request, req, db=db, current_user=user)  # type: ignore[arg-type]
         a = result.get("analysis", {})
 
         # Auto-save to Tracking (Telegram = quick dirty flow)
@@ -199,7 +200,7 @@ async def telegram_webhook(
             await send_telegram_message(chat_id, "Please paste your full resume (at least 500 characters).")
             return {"ok": True}
         req = ProfileExtractRequest(resume_text=arg)
-        await extract_profile_from_resume(req, db=db, current_user=user)  # type: ignore[arg-type]
+        await extract_profile_from_resume(request, req, db=db, current_user=user)  # type: ignore[arg-type]
         await send_telegram_message(chat_id, "Profile updated from resume.")
         return {"ok": True}
 

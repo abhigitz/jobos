@@ -1,5 +1,5 @@
 import json
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -226,6 +226,63 @@ async def create_content(
     await db.commit()
     await db.refresh(item)
     return ContentOut.model_validate(item)
+
+
+@router.post("/{content_id}/shuffle")
+@limiter.limit("50/hour")
+async def shuffle_content(
+    request: Request,
+    content_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    """Regenerate a single content piece while keeping others."""
+    content = await db.get(ContentCalendar, content_id)
+    if not content or content.user_id != current_user.id:
+        raise HTTPException(status_code=404, detail="Content not found")
+
+    prof_res = await db.execute(
+        select(ProfileDNA).where(ProfileDNA.user_id == current_user.id)
+    )
+    profile = prof_res.scalar_one_or_none()
+
+    from app.services.ai_service import generate_single_post
+    new_post = await generate_single_post(
+        topic=content.topic,
+        content_type=content.category or "",
+        profile=profile,
+    )
+
+    if new_post is None:
+        raise HTTPException(status_code=503, detail="AI generation failed")
+
+    content.draft_text = new_post
+    content.status = "Drafted"
+    content.updated_at = datetime.utcnow()
+    await db.commit()
+    await db.refresh(content)
+
+    return ContentOut.model_validate(content)
+
+
+@router.patch("/{content_id}/draft")
+async def save_draft(
+    content_id: str,
+    payload: dict,
+    db: AsyncSession = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    """Save edited draft content."""
+    content = await db.get(ContentCalendar, content_id)
+    if not content or content.user_id != current_user.id:
+        raise HTTPException(status_code=404, detail="Content not found")
+
+    content.draft_text = payload.get("draft_text", content.draft_text)
+    content.status = "Drafted"
+    content.updated_at = datetime.utcnow()
+    await db.commit()
+
+    return {"message": "Draft saved"}
 
 
 @router.patch("/{content_id}", response_model=ContentOut)

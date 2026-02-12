@@ -203,6 +203,25 @@ Return ONLY the post text, nothing else."""
     return await call_claude(prompt, max_tokens=500, task_type="content")
 
 
+async def generate_single_post(topic: str, content_type: str, profile: Any) -> str | None:
+    """Generate a single LinkedIn post for shuffle/regeneration."""
+    prompt = f"""Write a LinkedIn post about: {topic}
+
+Content type: {content_type}
+Author background: {profile.positioning_statement if profile else 'Growth leader in consumer tech'}
+
+Requirements:
+- 150-200 words
+- Professional but conversational tone
+- Include a hook in the first line
+- End with a question or call to action
+- No hashtags
+
+Return ONLY the post text, no preamble."""
+
+    return await call_claude(prompt, max_tokens=500, task_type="content")
+
+
 async def generate_company_deep_dive(company_name: str, sector: str | None, profile: dict[str, Any]) -> str | None:
     prompt = f"""Research and create a briefing on {company_name} ({sector}) for a job candidate.
 

@@ -56,7 +56,7 @@ async def telegram_webhook(
     if command == "/help":
         await send_telegram_message(
             chat_id,
-            "/connect email\n/disconnect\n/jd <job description>\n/apply Company | Role | URL | Source\n/status Company | NewStatus\n/pipeline\n/profile <resume>\n/log 3,4,3,y,1,2,y,Company",
+            "/connect email\n/disconnect\n/jd <job description>\n/apply Company | Role | URL | Source\n/status Company | NewStatus\n/pipeline\n/profile <resume>\n/log 3,4,3,y,1,2,y,Company\n/test-evening - Test evening check-in now\n/test-midday - Test midday check now",
         )
         return {"ok": True}
 
@@ -205,6 +205,16 @@ async def telegram_webhook(
             log.deep_dive_company = deep_dive_company
         await db.commit()
         await send_telegram_message(chat_id, "Daily log saved.")
+        return {"ok": True}
+
+    if command == "/test-evening":
+        from app.tasks.evening_checkin import evening_checkin_task
+        await evening_checkin_task()
+        return {"ok": True}
+
+    if command == "/test-midday":
+        from app.tasks.midday_check import midday_check_task
+        await midday_check_task()
         return {"ok": True}
 
     await send_telegram_message(chat_id, "Unknown command. Use /help.")

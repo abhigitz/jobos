@@ -14,13 +14,19 @@ logger = logging.getLogger(__name__)
 async def lifespan(app: FastAPI):
     from .services.telegram_service import register_webhook
     from .config import get_settings
+    from .scheduler import start_scheduler, stop_scheduler
 
     settings = get_settings()
     if settings.telegram_bot_token and settings.app_url:
         webhook_url = f"{settings.app_url}/api/telegram/webhook"
         await register_webhook(webhook_url, settings.telegram_webhook_secret)
         logger.info(f"Telegram webhook registered: {webhook_url}")
+
+    start_scheduler()
+
     yield
+
+    stop_scheduler()
 
 
 class TrailingSlashMiddleware(BaseHTTPMiddleware):

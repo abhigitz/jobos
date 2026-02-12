@@ -104,6 +104,8 @@ async def auto_ghost_task() -> None:
 
         if not ghosted_names and not warn_names:
             logger.info("Auto-ghost: no stale or at-risk jobs found")
+            if chat_id:
+                await send_telegram_message(chat_id, "Auto-ghost check: all clear. No stale Applied jobs.")
 
     except Exception as e:
         logger.error(f"Auto-ghost failed: {e}", exc_info=True)

@@ -1,3 +1,4 @@
+from datetime import datetime
 from typing import Optional
 from uuid import UUID
 
@@ -30,6 +31,8 @@ class CompanyUpdate(BaseModel):
     website: Optional[str] = None
     b2c_validated: Optional[bool] = None
     hq_city: Optional[str] = None
+    funding: Optional[str] = None
+    investors: Optional[list[str]] = None
     is_excluded: Optional[bool] = None
     deep_dive_content: Optional[str] = None
     notes: Optional[str] = None
@@ -45,9 +48,12 @@ class CompanyOut(BaseModel):
     website: Optional[str] = None
     b2c_validated: bool = False
     hq_city: Optional[str] = None
+    funding: Optional[str] = None
+    investors: Optional[list[str]] = None
     is_excluded: bool = False
     deep_dive_done: bool = False
     deep_dive_content: Optional[str] = None
+    last_researched: Optional[datetime] = None
     notes: Optional[str] = None
 
     @model_validator(mode='after')

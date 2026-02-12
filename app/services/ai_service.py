@@ -222,6 +222,48 @@ Return as structured text with clear headers."""
     return await call_claude(prompt, max_tokens=3000)
 
 
+async def research_company_structured(
+    company_name: str, sector: str | None, profile: dict[str, Any]
+) -> dict | None:
+    """Research company and return structured JSON for DB population."""
+    sector_hint = f" ({sector})" if sector else ""
+    prompt = f"""Research {company_name}{sector_hint} and create a briefing for a job candidate.
+
+CANDIDATE TARGETING: {profile.get('target_roles', [])}
+
+Return ONLY valid JSON (no markdown, no backticks, no extra text):
+{{
+  "sector": "industry/sector (e.g. Fintech, EdTech)",
+  "website": "company website URL or null if unknown",
+  "hq_city": "headquarters city or null",
+  "funding": "funding stage and amount (e.g. Series B, $50M) or null",
+  "investors": ["investor1", "investor2"] or [],
+  "stage": "Startup|Growth|Scale-up|Enterprise or null",
+  "deep_dive_content": "Full structured brief with headers covering: 1) Company Overview (what they do, business model, scale), 2) Recent News & Developments, 3) Growth Challenges (what problems they're likely hiring for), 4) Team & Leadership, 5) Likely Interview Questions (5 specific questions), 6) 90-Day Plan Prompt, 7) Investor/Backer Info. Use clear headers. 400-800 words."
+}}
+
+RULES:
+- Never use the em dash character. Use commas, periods, or hyphens.
+- Be factual. If info is unknown, use null or empty array.
+- deep_dive_content must be plain text with newlines, no markdown formatting."""
+
+    result = await call_claude(prompt, max_tokens=4000, task_type="deep")
+    parsed = parse_json_response(result)
+
+    # Safety net: strip em dashes from all string values
+    if parsed:
+        for key, value in list(parsed.items()):
+            if isinstance(value, str):
+                parsed[key] = value.replace("\u2014", ", ").replace("\u2013", ", ")
+            elif isinstance(value, list) and key == "investors":
+                parsed[key] = [
+                    v.replace("\u2014", ", ").replace("\u2013", ", ") if isinstance(v, str) else v
+                    for v in value
+                ]
+
+    return parsed
+
+
 async def generate_morning_briefing(data: dict[str, Any]) -> str | None:
     prompt = f"""Generate a morning briefing for a job seeker based on this data:
 

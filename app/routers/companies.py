@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Request
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -8,6 +8,7 @@ from app.models.company import Company
 from app.models.profile import ProfileDNA
 from app.schemas.companies import CompanyCreate, CompanyOut, CompanyQuickCreate, CompanySearchResult, CompanyUpdate
 from app.services.ai_service import generate_company_deep_dive
+from app.services.company_research import research_company_background
 
 
 router = APIRouter()
@@ -29,6 +30,7 @@ async def list_companies(
 @router.post("", response_model=CompanyOut)
 async def create_company(
     payload: CompanyCreate,
+    background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
     current_user=Depends(get_current_user),
 ) -> CompanyOut:
@@ -46,6 +48,7 @@ async def create_company(
     db.add(company)
     await db.commit()
     await db.refresh(company)
+    background_tasks.add_task(research_company_background, str(company.id), str(current_user.id))
     return CompanyOut.model_validate(company)
 
 
@@ -87,6 +90,7 @@ async def search_companies(
 @router.post("/quick-create", response_model=CompanyOut, status_code=201)
 async def quick_create_company(
     payload: CompanyQuickCreate,
+    background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
     current_user=Depends(get_current_user),
 ):
@@ -106,6 +110,7 @@ async def quick_create_company(
     db.add(company)
     await db.commit()
     await db.refresh(company)
+    background_tasks.add_task(research_company_background, str(company.id), str(current_user.id))
     return CompanyOut.model_validate(company)
 
 

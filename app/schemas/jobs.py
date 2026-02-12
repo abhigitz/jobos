@@ -6,8 +6,14 @@ from pydantic import BaseModel, Field, field_validator, model_validator
 
 
 class JDAnalyzeRequest(BaseModel):
-    jd_text: str = Field(..., min_length=100, max_length=15000)
+    jd_text: Optional[str] = Field(None, max_length=15000)
     jd_url: Optional[str] = Field(None, max_length=1000)
+
+    @model_validator(mode='after')
+    def check_text_or_url(self):
+        if not self.jd_text and not self.jd_url:
+            raise ValueError("Either jd_text or jd_url must be provided")
+        return self
 
 
 class SaveFromAnalysisRequest(BaseModel):

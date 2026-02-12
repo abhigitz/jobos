@@ -33,6 +33,7 @@ from app.dependencies import limiter
 from app.services.activity_log import log_activity
 from app.config import get_settings
 from app.services.ai_service import analyze_jd, call_claude, deep_resume_analysis
+from app.services.jd_extractor import extract_jd_from_url
 
 
 router = APIRouter()
@@ -306,7 +307,17 @@ async def analyze_jd_endpoint(
     current_user=Depends(get_current_user),
 ):
     """Analyze a JD against user profile. Returns analysis only, does NOT create a Job."""
-    if not (50 <= len(payload.jd_text) <= 15000):
+    jd_text = payload.jd_text or ""
+    extracted_from_url = False
+
+    if payload.jd_url and len(jd_text) < 50:
+        try:
+            jd_text = await extract_jd_from_url(payload.jd_url)
+            extracted_from_url = True
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))
+
+    if not (50 <= len(jd_text) <= 15000):
         raise HTTPException(status_code=400, detail="jd_text must be between 50 and 15000 characters")
 
     prof_res = await db.execute(select(ProfileDNA).where(ProfileDNA.user_id == current_user.id))
@@ -326,7 +337,7 @@ async def analyze_jd_endpoint(
             "years_of_experience": profile.years_of_experience,
         }
 
-    analysis = await analyze_jd(payload.jd_text, profile_dict)
+    analysis = await analyze_jd(jd_text, profile_dict)
     if analysis is None:
         raise HTTPException(status_code=503, detail="AI analysis temporarily unavailable")
 
@@ -347,6 +358,8 @@ async def analyze_jd_endpoint(
         "company_name": analysis.get("company_name", "Unknown Company"),
         "role_title": analysis.get("role_title", "Unknown Role"),
         "jd_url": payload.jd_url,
+        "extracted_from_url": extracted_from_url,
+        "extracted_text_preview": jd_text[:200] + "..." if extracted_from_url else None,
     }
 
 

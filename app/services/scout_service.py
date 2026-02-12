@@ -121,8 +121,10 @@ async def _fetch_adzuna(queries: list[str], app_id: str, api_key: str) -> list[d
     Field mapping verified against real API responses.
     """
     results = []
+    logger.info(f"Adzuna: starting fetch for {len(queries)} queries")
     async with httpx.AsyncClient(timeout=30.0) as client:
         for query in queries:
+            logger.info(f"Adzuna fetching: {query}")
             try:
                 resp = await client.get(
                     "https://api.adzuna.com/v1/api/jobs/in/search/1",
@@ -136,13 +138,18 @@ async def _fetch_adzuna(queries: list[str], app_id: str, api_key: str) -> list[d
                     },
                 )
                 if resp.status_code != 200:
-                    logger.error(f"Adzuna API error: {resp.status_code} for query '{query}'")
+                    logger.error(
+                        f"Adzuna API error: {resp.status_code} for query '{query}' "
+                        f"-- body: {resp.text[:500]}"
+                    )
                     continue
                 data = resp.json()
+                count = len(data.get("results", []))
+                logger.info(f"Adzuna returned {count} results for: {query}")
                 for item in data.get("results", []):
                     results.append(_normalize_adzuna(item))
             except Exception as e:
-                logger.error(f"Adzuna fetch failed for '{query}': {e}")
+                logger.error(f"Adzuna error for {query}: {e}", exc_info=True)
     return [r for r in results if r is not None]
 
 
@@ -452,8 +459,12 @@ async def run_scout(user_id: str | None = None) -> dict:
             "Bangalore", "Remote",
         ]
 
-        # Build search queries from target_roles
+        # Build search queries from target_roles (hardcoded, no scout_queries table)
         queries = [f"{role} B2C Bangalore" for role in target_roles[:5]]
+        logger.info(
+            f"Scout {run_id}: {len(queries)} queries built from "
+            f"{'profile' if profile and profile.target_roles else 'hardcoded defaults'}: {queries}"
+        )
 
         # Build profile summary for AI scoring
         profile_summary = "No detailed profile available."
@@ -476,7 +487,13 @@ async def run_scout(user_id: str | None = None) -> dict:
         sources_queried: list[str] = []
 
         # Primary source: Adzuna (structured job data, better field mapping)
-        if settings.adzuna_app_id and settings.adzuna_api_key:
+        adzuna_configured = bool(settings.adzuna_app_id and settings.adzuna_api_key)
+        logger.info(
+            f"Scout {run_id}: Adzuna configured={adzuna_configured}, "
+            f"app_id={'SET' if settings.adzuna_app_id else 'EMPTY'}, "
+            f"api_key={'SET' if settings.adzuna_api_key else 'EMPTY'}"
+        )
+        if adzuna_configured:
             adzuna_results = await _fetch_adzuna(
                 queries, settings.adzuna_app_id, settings.adzuna_api_key
             )
@@ -485,6 +502,7 @@ async def run_scout(user_id: str | None = None) -> dict:
             logger.info(f"Scout {run_id}: Adzuna (primary) returned {len(adzuna_results)} results")
         else:
             errors.append("Adzuna API keys not configured, skipping")
+            logger.error(f"Scout {run_id}: Adzuna SKIPPED -- keys not configured")
 
         # Serper DISABLED -- the /search endpoint returns Google result pages
         # (e.g. "LinkedIn: 228 Head Of Growth jobs in Bengaluru"), not individual

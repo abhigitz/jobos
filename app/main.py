@@ -1,7 +1,7 @@
 import logging
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
@@ -15,8 +15,17 @@ async def lifespan(app: FastAPI):
     from .services.telegram_service import register_webhook
     from .config import get_settings
     from .scheduler import start_scheduler, stop_scheduler
+    from sqlalchemy import text
+    from .database import engine
 
     settings = get_settings()
+    # Check resume_files table exists (helps debug 500 on upload)
+    try:
+        async with engine.connect() as conn:
+            await conn.execute(text("SELECT 1 FROM resume_files LIMIT 1"))
+    except Exception as e:
+        if "does not exist" in str(e) or "resume_files" in str(e):
+            logger.warning("resume_files table not found. Run: alembic upgrade head")
     if settings.telegram_bot_token and settings.app_url:
         webhook_url = f"{settings.app_url}/api/telegram/webhook"
         await register_webhook(webhook_url, settings.telegram_webhook_secret)
@@ -93,6 +102,27 @@ app.include_router(telegram.router, prefix="/api/telegram", tags=["telegram"])
 app.include_router(interviews.router, prefix="/api/interviews", tags=["interviews"])
 app.include_router(scout.router, prefix="/api/scout", tags=["scout"])
 app.include_router(search.router)
+
+
+@app.exception_handler(Exception)
+async def debug_unhandled_exception(request, exc):
+    """Log unhandled exceptions for debug session."""
+    if isinstance(exc, HTTPException):
+        raise exc
+    import traceback
+    tb = traceback.format_exc()
+    logger.exception("Unhandled exception: %s (path=%s)", exc, request.url.path)
+    try:
+        from pathlib import Path
+        _log_path = Path(__file__).resolve().parent.parent / "debug_resume.log"
+        with open(_log_path, "a") as _log:
+            import json
+            _log.write(json.dumps({"id":"log_unhandled","timestamp":__import__("time").time()*1000,"location":"main.py:exception_handler","message":"Unhandled exception","data":{"path":request.url.path,"error":str(exc),"tb":tb},"hypothesisId":"H1,H2,H3,H4,H5"})+"\n")
+    except Exception:
+        pass
+    from starlette.responses import JSONResponse
+    # Include traceback in response for debugging (client can inspect response body)
+    return JSONResponse(status_code=500, content={"detail": str(exc), "traceback": tb})
 
 
 @app.get("/api/health")

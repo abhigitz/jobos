@@ -1,0 +1,3 @@
+*.sql
+*.sql.gz
+debug_resume.log

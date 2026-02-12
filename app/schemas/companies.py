@@ -38,7 +38,7 @@ class CompanyUpdate(BaseModel):
 class CompanyOut(BaseModel):
     id: UUID
     name: str
-    lane: int
+    lane: Optional[int] = None
     stage: Optional[str]
     sector: Optional[str]
     website: Optional[str] = None

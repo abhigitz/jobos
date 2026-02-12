@@ -486,15 +486,16 @@ async def run_scout(user_id: str | None = None) -> dict:
         else:
             errors.append("Adzuna API keys not configured, skipping")
 
-        # Supplementary source: Serper (Google search, broader coverage)
-        if settings.serper_api_key:
-            serper_queries = [f"{q} jobs" for q in queries]
-            serper_results = await _fetch_serper(serper_queries, settings.serper_api_key)
-            all_items.extend(serper_results)
-            sources_queried.append("serper")
-            logger.info(f"Scout {run_id}: Serper (supplementary) returned {len(serper_results)} results")
-        else:
-            errors.append("Serper API key not configured, skipping")
+        # Serper DISABLED -- the /search endpoint returns Google result pages
+        # (e.g. "LinkedIn: 228 Head Of Growth jobs in Bengaluru"), not individual
+        # job postings, which pollutes the pipeline. Keeping code in codebase
+        # for potential re-enable with better filtering later.
+        # if settings.serper_api_key:
+        #     serper_queries = [f"{q} jobs" for q in queries]
+        #     serper_results = await _fetch_serper(serper_queries, settings.serper_api_key)
+        #     all_items.extend(serper_results)
+        #     sources_queried.append("serper")
+        #     logger.info(f"Scout {run_id}: Serper (supplementary) returned {len(serper_results)} results")
 
         total_fetched = len(all_items)
 

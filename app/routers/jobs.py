@@ -412,6 +412,25 @@ async def save_from_analysis(
         )
         db.add(job)
 
+    # --- Auto-create company if not exists ---
+    if company_name and company_name.strip():
+        existing_company = await db.execute(
+            select(Company).where(
+                func.lower(Company.name) == func.lower(company_name.strip()),
+                Company.user_id == current_user.id,
+            )
+        )
+        company = existing_company.scalar_one_or_none()
+        if not company:
+            company = Company(
+                user_id=current_user.id,
+                name=company_name.strip(),
+            )
+            db.add(company)
+            await db.flush()
+        job.company_id = company.id
+    # --- End auto-create ---
+
     # Add system notes for timeline
     notes = job.notes if job.notes else []
     notes.append({

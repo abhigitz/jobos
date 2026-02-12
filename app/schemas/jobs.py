@@ -163,6 +163,7 @@ class JobUpdate(BaseModel):
 
 class JobOut(BaseModel):
     id: UUID
+    company_id: Optional[UUID] = None
     company_name: str
     role_title: str
     jd_text: Optional[str] = None

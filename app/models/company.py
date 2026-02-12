@@ -17,7 +17,7 @@ class Company(Base, IDMixin, TimestampMixin):
         UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
     )
     name: Mapped[str] = mapped_column(String(255), nullable=False)
-    lane: Mapped[int]
+    lane: Mapped[int | None]
     stage: Mapped[str | None] = mapped_column(String(50))
     sector: Mapped[str | None] = mapped_column(String(100))
     b2c_validated: Mapped[bool] = mapped_column(Boolean, default=False)

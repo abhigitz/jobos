@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import uuid
 from datetime import date
+from typing import Optional
 
 from sqlalchemy import Boolean, Date, ForeignKey, Integer, String
 from sqlalchemy.dialects.postgresql import UUID
@@ -18,7 +19,7 @@ class JDKeyword(Base, IDMixin, TimestampMixin):
     )
     keyword: Mapped[str] = mapped_column(String(255), nullable=False)
     frequency_count: Mapped[int] = mapped_column(Integer, default=1)
-    category: Mapped[str | None] = mapped_column(String(100))
+    category: Mapped[Optional[str]] = mapped_column(String(100))
     in_profile_dna: Mapped[bool] = mapped_column(Boolean, default=False)
-    gap_flagged_date: Mapped[date | None] = mapped_column(Date())
-    addressed_date: Mapped[date | None] = mapped_column(Date())
+    gap_flagged_date: Mapped[Optional[date]] = mapped_column(Date())
+    addressed_date: Mapped[Optional[date]] = mapped_column(Date())

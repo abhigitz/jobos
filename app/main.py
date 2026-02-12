@@ -71,6 +71,7 @@ from .routers import (  # noqa: E402
     interviews,
     jobs,
     profile,
+    resume,
     scout,
     telegram,
 )
@@ -78,6 +79,7 @@ from .routers import (  # noqa: E402
 app.include_router(activity.router, prefix="/api/activity", tags=["activity"])
 app.include_router(auth.router, prefix="/api/auth", tags=["auth"])
 app.include_router(profile.router, prefix="/api/profile", tags=["profile"])
+app.include_router(resume.router, prefix="/api/resume", tags=["resume"])
 app.include_router(jobs.router, prefix="/api/jobs", tags=["jobs"])
 app.include_router(companies.router, prefix="/api/companies", tags=["companies"])
 app.include_router(contacts.router, prefix="/api/contacts", tags=["contacts"])

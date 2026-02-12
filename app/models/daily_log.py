@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import uuid
 from datetime import date, datetime
+from typing import Optional
 
 from sqlalchemy import Boolean, CheckConstraint, Date, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint
 from sqlalchemy.dialects.postgresql import UUID
@@ -24,14 +25,14 @@ class DailyLog(Base, IDMixin, TimestampMixin):
     networking_calls: Mapped[int] = mapped_column(Integer, default=0)
     referrals_asked: Mapped[int] = mapped_column(Integer, default=0)
     naukri_updated: Mapped[bool] = mapped_column(Boolean, default=False)
-    deep_dive_company: Mapped[str | None] = mapped_column(String(255))
-    hours_spent: Mapped[float | None]
-    self_rating: Mapped[int | None]
-    key_win: Mapped[str | None] = mapped_column(Text)
-    tomorrow_priorities: Mapped[str | None] = mapped_column(Text)
-    energy_level: Mapped[int | None]
-    mood: Mapped[str | None] = mapped_column(String(50))
-    notes: Mapped[str | None] = mapped_column(Text)
+    deep_dive_company: Mapped[Optional[str]] = mapped_column(String(255))
+    hours_spent: Mapped[Optional[float]]
+    self_rating: Mapped[Optional[int]]
+    key_win: Mapped[Optional[str]] = mapped_column(Text)
+    tomorrow_priorities: Mapped[Optional[str]] = mapped_column(Text)
+    energy_level: Mapped[Optional[int]]
+    mood: Mapped[Optional[str]] = mapped_column(String(50))
+    notes: Mapped[Optional[str]] = mapped_column(Text)
 
     __table_args__ = (
         UniqueConstraint("user_id", "log_date", name="uq_daily_log_user_date"),

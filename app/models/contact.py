@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 import uuid
-from datetime import datetime
+from datetime import date, datetime
+from typing import Optional
 
 from sqlalchemy import Boolean, CheckConstraint, Date, DateTime, ForeignKey, String, Text
 from sqlalchemy.dialects.postgresql import UUID
@@ -17,19 +18,19 @@ class Contact(Base, IDMixin, TimestampMixin):
         UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
     )
     name: Mapped[str] = mapped_column(String(255), nullable=False)
-    company: Mapped[str | None] = mapped_column(String(255))
-    their_role: Mapped[str | None] = mapped_column(String(255))
-    connection_type: Mapped[str | None] = mapped_column(String(100))
-    linkedin_url: Mapped[str | None] = mapped_column(String(1000))
-    email: Mapped[str | None] = mapped_column(String(255))
-    reached_out_date: Mapped[datetime | None] = mapped_column(Date())
-    response: Mapped[str | None] = mapped_column(Text)
-    follow_up_date: Mapped[datetime | None] = mapped_column(Date())
+    company: Mapped[Optional[str]] = mapped_column(String(255))
+    their_role: Mapped[Optional[str]] = mapped_column(String(255))
+    connection_type: Mapped[Optional[str]] = mapped_column(String(100))
+    linkedin_url: Mapped[Optional[str]] = mapped_column(String(1000))
+    email: Mapped[Optional[str]] = mapped_column(String(255))
+    reached_out_date: Mapped[Optional[date]] = mapped_column(Date())
+    response: Mapped[Optional[str]] = mapped_column(Text)
+    follow_up_date: Mapped[Optional[date]] = mapped_column(Date())
     referral_status: Mapped[str] = mapped_column(String(50), default="Identified")
-    last_outreach_date: Mapped[datetime | None] = mapped_column(Date())
-    outreach_notes: Mapped[str | None] = mapped_column(Text)
+    last_outreach_date: Mapped[Optional[date]] = mapped_column(Date())
+    outreach_notes: Mapped[Optional[str]] = mapped_column(Text)
     is_deleted: Mapped[bool] = mapped_column(Boolean, default=False)
-    notes: Mapped[str | None] = mapped_column(Text)
+    notes: Mapped[Optional[str]] = mapped_column(Text)
 
     __table_args__ = (
         CheckConstraint(

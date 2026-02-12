@@ -12,6 +12,7 @@ from .interview import Interview
 from .activity_log import ActivityLog
 from .email_verification_token import EmailVerificationToken
 from .password_reset_token import PasswordResetToken
+from .resume import ResumeFile
 from .scout_result import ScoutResult
 
 __all__ = [
@@ -30,5 +31,6 @@ __all__ = [
     "ActivityLog",
     "EmailVerificationToken",
     "PasswordResetToken",
+    "ResumeFile",
     "ScoutResult",
 ]

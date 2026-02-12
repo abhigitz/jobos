@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import uuid
 from datetime import date, datetime
+from typing import Dict, List, Optional
 
 from sqlalchemy import Boolean, CheckConstraint, Date, DateTime, ForeignKey, Integer, String, Text
 from sqlalchemy.dialects.postgresql import ARRAY, JSONB, UUID
@@ -16,42 +17,42 @@ class Job(Base, IDMixin, TimestampMixin):
     user_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
     )
-    company_id: Mapped[uuid.UUID | None] = mapped_column(
+    company_id: Mapped[Optional[uuid.UUID]] = mapped_column(
         UUID(as_uuid=True), ForeignKey("companies.id", ondelete="SET NULL"), nullable=True, index=True
     )
     company_name: Mapped[str] = mapped_column(String(255), nullable=False)
     role_title: Mapped[str] = mapped_column(String(255), nullable=False)
-    jd_text: Mapped[str | None] = mapped_column(Text)
-    jd_url: Mapped[str | None] = mapped_column(String(1000))
-    source_portal: Mapped[str | None] = mapped_column(String(100))
-    fit_score: Mapped[float | None]
-    ats_score: Mapped[float | None]
+    jd_text: Mapped[Optional[str]] = mapped_column(Text)
+    jd_url: Mapped[Optional[str]] = mapped_column(String(1000))
+    source_portal: Mapped[Optional[str]] = mapped_column(String(100))
+    fit_score: Mapped[Optional[float]]
+    ats_score: Mapped[Optional[float]]
     status: Mapped[str] = mapped_column(String(50), default="Tracking")
-    resume_version: Mapped[str | None] = mapped_column(String(100))
-    apply_type: Mapped[str | None] = mapped_column(String(10))
-    cover_letter: Mapped[str | None] = mapped_column(Text)
-    referral_contact: Mapped[str | None] = mapped_column(String(255))
-    application_channel: Mapped[str | None] = mapped_column(String(50))
-    closed_reason: Mapped[str | None] = mapped_column(String(50))
-    keywords_matched: Mapped[list[str] | None] = mapped_column(ARRAY(String))
-    keywords_missing: Mapped[list[str] | None] = mapped_column(ARRAY(String))
-    ai_analysis: Mapped[dict | None] = mapped_column(JSONB)
-    fit_reasoning: Mapped[str | None] = mapped_column(Text)
-    salary_range: Mapped[str | None] = mapped_column(String(100))
-    resume_suggestions: Mapped[list | None] = mapped_column(JSONB)
-    interview_angle: Mapped[str | None] = mapped_column(Text)
-    b2c_check: Mapped[bool | None] = mapped_column(Boolean)
-    b2c_reason: Mapped[str | None] = mapped_column(String(200))
-    applied_date: Mapped[date | None] = mapped_column(Date())
-    interview_date: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
-    interview_type: Mapped[str | None] = mapped_column(String(50))
-    interviewer_name: Mapped[str | None] = mapped_column(String(255))
-    interviewer_linkedin: Mapped[str | None] = mapped_column(String(1000))
-    prep_notes: Mapped[str | None] = mapped_column(Text)
-    interview_feedback: Mapped[str | None] = mapped_column(Text)
+    resume_version: Mapped[Optional[str]] = mapped_column(String(100))
+    apply_type: Mapped[Optional[str]] = mapped_column(String(10))
+    cover_letter: Mapped[Optional[str]] = mapped_column(Text)
+    referral_contact: Mapped[Optional[str]] = mapped_column(String(255))
+    application_channel: Mapped[Optional[str]] = mapped_column(String(50))
+    closed_reason: Mapped[Optional[str]] = mapped_column(String(50))
+    keywords_matched: Mapped[Optional[List[str]]] = mapped_column(ARRAY(String))
+    keywords_missing: Mapped[Optional[List[str]]] = mapped_column(ARRAY(String))
+    ai_analysis: Mapped[Optional[Dict]] = mapped_column(JSONB)
+    fit_reasoning: Mapped[Optional[str]] = mapped_column(Text)
+    salary_range: Mapped[Optional[str]] = mapped_column(String(100))
+    resume_suggestions: Mapped[Optional[list]] = mapped_column(JSONB)
+    interview_angle: Mapped[Optional[str]] = mapped_column(Text)
+    b2c_check: Mapped[Optional[bool]] = mapped_column(Boolean)
+    b2c_reason: Mapped[Optional[str]] = mapped_column(String(200))
+    applied_date: Mapped[Optional[date]] = mapped_column(Date())
+    interview_date: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+    interview_type: Mapped[Optional[str]] = mapped_column(String(50))
+    interviewer_name: Mapped[Optional[str]] = mapped_column(String(255))
+    interviewer_linkedin: Mapped[Optional[str]] = mapped_column(String(1000))
+    prep_notes: Mapped[Optional[str]] = mapped_column(Text)
+    interview_feedback: Mapped[Optional[str]] = mapped_column(Text)
     is_deleted: Mapped[bool] = mapped_column(Boolean, default=False)
-    notes: Mapped[list | None] = mapped_column(JSONB, server_default='[]', default=list)
-    last_followup_date: Mapped[date | None] = mapped_column(Date())
+    notes: Mapped[Optional[list]] = mapped_column(JSONB, server_default='[]', default=list)
+    last_followup_date: Mapped[Optional[date]] = mapped_column(Date())
     followup_count: Mapped[int] = mapped_column(Integer, default=0)
 
     __table_args__ = (

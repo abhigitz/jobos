@@ -28,6 +28,10 @@ class SaveFromAnalysisRequest(BaseModel):
     keywords_missing: Optional[list[str]] = None
     ai_analysis: Optional[dict] = None
     cover_letter: Optional[str] = None
+    resume_suggestions: Optional[list] = None
+    interview_angle: Optional[str] = None
+    b2c_check: Optional[bool] = None
+    b2c_reason: Optional[str] = None
 
     @field_validator("status")
     @classmethod
@@ -181,6 +185,10 @@ class JobOut(BaseModel):
     ai_analysis: Optional[dict] = None
     fit_reasoning: Optional[str] = None
     salary_range: Optional[str] = None
+    resume_suggestions: Optional[list] = None
+    interview_angle: Optional[str] = None
+    b2c_check: Optional[bool] = None
+    b2c_reason: Optional[str] = None
     applied_date: Optional[date] = None
     interview_date: Optional[datetime] = None
     interview_type: Optional[str] = None

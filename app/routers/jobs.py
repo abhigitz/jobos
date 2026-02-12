@@ -382,6 +382,10 @@ async def save_from_analysis(
         existing_job.keywords_missing = payload.keywords_missing
         existing_job.ai_analysis = payload.ai_analysis
         existing_job.cover_letter = payload.cover_letter
+        existing_job.resume_suggestions = payload.resume_suggestions
+        existing_job.interview_angle = payload.interview_angle
+        existing_job.b2c_check = payload.b2c_check
+        existing_job.b2c_reason = payload.b2c_reason
         existing_job.source_portal = payload.source_portal or "JD Analysis"
 
         # Update status if upgrading (Tracking -> Applied)
@@ -410,6 +414,10 @@ async def save_from_analysis(
             keywords_missing=payload.keywords_missing,
             ai_analysis=payload.ai_analysis,
             cover_letter=payload.cover_letter,
+            resume_suggestions=payload.resume_suggestions,
+            interview_angle=payload.interview_angle,
+            b2c_check=payload.b2c_check,
+            b2c_reason=payload.b2c_reason,
             source_portal=payload.source_portal or "JD Analysis",
             notes=[],
         )

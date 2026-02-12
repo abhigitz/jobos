@@ -20,10 +20,15 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    # Delete garbage jobs promoted from Serper scout results
-    op.execute("DELETE FROM jobs WHERE source_portal = 'serper'")
-    # Also delete the corresponding scout_results so they don't block future dedup
+    # 1. Delete activity_log entries referencing serper jobs (FK: activity_log.related_job_id)
+    op.execute(
+        "DELETE FROM activity_log WHERE related_job_id IN "
+        "(SELECT id FROM jobs WHERE source_portal = 'serper')"
+    )
+    # 2. Delete scout_results from serper so they don't block future dedup
     op.execute("DELETE FROM scout_results WHERE source = 'serper'")
+    # 3. Now safe to delete the garbage jobs themselves
+    op.execute("DELETE FROM jobs WHERE source_portal = 'serper'")
 
 
 def downgrade() -> None:

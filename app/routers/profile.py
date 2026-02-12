@@ -76,29 +76,39 @@ async def extract_profile_from_resume(
     current_user=Depends(get_current_user),
 ):
     """Send resume text → Claude extracts structured profile → upsert profile_dna."""
-    prompt = f"""Extract structured profile data from this resume. Return ONLY valid JSON.
+    prompt = f"""Extract a structured professional profile from this resume.
 
+CRITICAL RULES:
+1. Extract EVERY bullet point from work experience as an achievement
+2. Always include metrics when numbers/percentages/amounts appear in the bullet
+3. Map each achievement to the company where it occurred
+4. For achievements without explicit metrics, use "N/A" for the metric field
+
+Return ONLY valid JSON:
 {{
-    "full_name": "...",
-    "positioning_statement": "one sentence summary",
-    "target_roles": ["role1", "role2"],
-    "core_skills": ["skill1", "skill2"],
-    "tools_platforms": ["tool1"],
-    "industries": ["industry1"],
-    "achievements": [{{"description": "...", "metric": "...", "company": "..."}}],
+    "full_name": "Full Name from resume",
+    "positioning_statement": "One sentence summary of their professional identity",
+    "target_roles": ["Target role 1", "Target role 2"],
+    "core_skills": ["skill1", "skill2", "skill3"],
+    "tools_platforms": ["tool1", "tool2"],
+    "industries": ["industry1", "industry2"],
+    "achievements": [
+        {{"company": "Company Name", "description": "Led cross-functional team to launch new product", "metric": "15% revenue increase"}},
+        {{"company": "Company Name", "description": "Built data pipeline", "metric": "N/A"}}
+    ],
     "resume_keywords": ["keyword1", "keyword2"],
-    "education": [{{"institution": "...", "degree": "...", "year": "..."}}],
-    "alumni_networks": ["IIT Delhi", "IIM Calcutta"],
+    "education": [{{"institution": "University", "degree": "Degree", "year": "2020"}}],
+    "alumni_networks": ["Network1", "Network2"],
     "career_narrative": "3-4 sentence career story",
     "experience_level": "Entry|Mid|Senior|Director|VP",
-    "years_of_experience": 13
+    "years_of_experience": 10
 }}
 
 RESUME TEXT:
 {payload.resume_text}"""
 
     try:
-        raw_result = await call_claude(prompt, max_tokens=2000)
+        raw_result = await call_claude(prompt, max_tokens=4000)
         if raw_result is None:
             raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="AI extraction failed")
         data = parse_json_response(raw_result)

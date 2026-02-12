@@ -174,7 +174,7 @@ Return ONLY valid JSON:
   "core_skills": ["skill1", "skill2"],
   "tools_platforms": ["tool1"],
   "industries": ["industry1"],
-  "achievements": [{{"company": "...", "achievement": "...", "metric": "..."}}],
+  "achievements": [{{"company": "...", "description": "...", "metric": "..."}}],
   "resume_keywords": ["keyword1", "keyword2", ...],
   "education": [{{"institution": "...", "degree": "...", "year": "..."}}],
   "alumni_networks": ["network1"],

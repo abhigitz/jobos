@@ -59,7 +59,7 @@ async def telegram_webhook(
     if command == "/help":
         await send_telegram_message(
             chat_id,
-            "/connect email\n/disconnect\n/jd <job description>\n/apply Company | Role | URL | Source\n/status Company | NewStatus\n/pipeline\n/profile <resume>\n/log 3,4,3,y,1,2,y,Company\n/test-evening - Test evening check-in now\n/test-midday - Test midday check now\n/test-morning - Test morning briefing\n/test-content - Test LinkedIn content draft\n/test-review - Test weekly review",
+            "/connect email\n/disconnect\n/jd <job description>\n/apply Company | Role | URL | Source\n/status Company | NewStatus\n/pipeline\n/profile <resume>\n/log 3,4,3,y,1,2,y,Company\n/scout - Run Job Scout now\n/test-evening - Test evening check-in now\n/test-midday - Test midday check now\n/test-morning - Test morning briefing\n/test-content - Test LinkedIn content draft\n/test-review - Test weekly review\n/test-scout - Test scheduled scout task",
         )
         return {"ok": True}
 
@@ -282,6 +282,32 @@ async def telegram_webhook(
     if command == "/test-ghost":
         from app.tasks.auto_ghost import auto_ghost_task
         await auto_ghost_task()
+        return {"ok": True}
+
+    if command == "/scout":
+        from app.services.scout_service import run_scout
+        await send_telegram_message(chat_id, "Running Job Scout... This takes 30-60 seconds.")
+        try:
+            summary = await run_scout(user_id=str(user.id))
+            await send_telegram_message(
+                chat_id,
+                f"Scout complete!\n"
+                f"Fetched: {summary.get('total_fetched', 0)}\n"
+                f"After dedup: {summary.get('after_dedup', 0)}\n"
+                f"Pre-filtered: {summary.get('after_prefilter', 0)}\n"
+                f"AI scored: {summary.get('ai_scored', 0)}\n"
+                f"Promoted (7+): {summary.get('promoted_to_pipeline', 0)}\n"
+                f"For review (5-6): {summary.get('saved_for_review', 0)}\n"
+                f"Dismissed: {summary.get('dismissed', 0)}",
+            )
+        except Exception as e:
+            logger.error(f"Telegram /scout failed: {e}", exc_info=True)
+            await send_telegram_message(chat_id, f"Scout failed: {str(e)[:200]}")
+        return {"ok": True}
+
+    if command == "/test-scout":
+        from app.tasks.job_scout import job_scout_task
+        await job_scout_task()
         return {"ok": True}
 
     await send_telegram_message(chat_id, "Unknown command. Use /help.")

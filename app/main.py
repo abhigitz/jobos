@@ -63,6 +63,7 @@ from .routers import (  # noqa: E402
     interviews,
     jobs,
     profile,
+    scout,
     telegram,
 )
 
@@ -78,6 +79,7 @@ app.include_router(briefings_user.router, prefix="/api/briefings", tags=["briefi
 app.include_router(daily_logs.router, prefix="/api/daily-logs", tags=["daily-logs"])
 app.include_router(telegram.router, prefix="/api/telegram", tags=["telegram"])
 app.include_router(interviews.router, prefix="/api/interviews", tags=["interviews"])
+app.include_router(scout.router, prefix="/api/scout", tags=["scout"])
 
 
 @app.get("/api/health")

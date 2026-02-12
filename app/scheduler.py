@@ -17,6 +17,7 @@ def register_jobs() -> None:
     from app.tasks.linkedin_content import linkedin_content_task
     from app.tasks.weekly_review import weekly_review_task
     from app.tasks.auto_ghost import auto_ghost_task
+    from app.tasks.job_scout import job_scout_task
 
     # All times in UTC. Railway runs UTC.
 
@@ -74,11 +75,30 @@ def register_jobs() -> None:
         misfire_grace_time=300,
     )
 
+    # 6:00 AM IST = 0:30 AM UTC, daily (Job Scout morning run)
+    scheduler.add_job(
+        job_scout_task,
+        CronTrigger(hour=0, minute=30),
+        id="job_scout_morning",
+        replace_existing=True,
+        misfire_grace_time=300,
+    )
+
+    # 6:00 PM IST = 12:30 PM UTC, daily (Job Scout evening run)
+    scheduler.add_job(
+        job_scout_task,
+        CronTrigger(hour=12, minute=30),
+        id="job_scout_evening",
+        replace_existing=True,
+        misfire_grace_time=300,
+    )
+
     logger.info(
         "Scheduler jobs registered: "
         "auto_ghost (02:55 UTC), morning (03:00 UTC), midday (08:30 UTC), "
         "evening (13:00 UTC), linkedin (13:30 UTC), "
-        "weekly (Sun 03:30 UTC)"
+        "weekly (Sun 03:30 UTC), "
+        "job_scout (00:30 + 12:30 UTC)"
     )
 
 

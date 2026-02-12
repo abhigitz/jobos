@@ -20,6 +20,9 @@ class Settings(BaseSettings):
     owner_email: str = ""
     owner_phone: str = ""
     owner_linkedin_url: str = ""
+    serper_api_key: str = ""
+    adzuna_app_id: str = ""
+    adzuna_api_key: str = ""
 
     class Config:
         env_file = ".env"

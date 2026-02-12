@@ -23,6 +23,17 @@ router = APIRouter()
 MAX_FILE_SIZE = 5 * 1024 * 1024  # 5MB
 ALLOWED_MIME = "application/pdf"
 _DEBUG_LOG = Path(__file__).resolve().parents[2] / "debug_resume.log"
+_DBG = Path(__file__).resolve().parents[2] / ".cursor" / "debug.log"
+
+
+def _dbg(msg: str, data: dict, hypothesis_id: str) -> None:
+    try:
+        import json, time
+        with open(_DBG, "a") as f:
+            f.write(json.dumps({"id": msg, "timestamp": time.time() * 1000, "location": "resume.py", "message": msg, "data": data, "hypothesisId": hypothesis_id}) + "\n")
+    except Exception:
+        pass
+    logger.info("[DEBUG] %s hypothesis=%s data=%s", msg, hypothesis_id, data)
 
 
 def _extract_text_from_pdf(pdf_bytes: bytes) -> str:
@@ -52,12 +63,7 @@ async def upload_resume(
         raise HTTPException(status_code=422, detail="Missing file. Send form field 'file' or 'resume' with PDF.")
     file = upload
     # #region agent log
-    try:
-        with open(_DEBUG_LOG, "a") as _log:
-            import json
-            _log.write(json.dumps({"id":"log_entry","timestamp":__import__("time").time()*1000,"location":"resume.py:upload_resume","message":"upload_resume entry","data":{"user_id":str(current_user.id),"filename":file.filename},"hypothesisId":"H5"})+"\n")
-    except Exception:
-        pass
+    _dbg("upload_entry", {"user_id": str(current_user.id), "filename": file.filename}, "H5")
     # #endregion
     if file.content_type != ALLOWED_MIME:
         raise HTTPException(status_code=400, detail="Only PDF files are allowed")
@@ -69,16 +75,10 @@ async def upload_resume(
     # #region agent log
     try:
         extracted_text = _extract_text_from_pdf(content)
-        with open(_DEBUG_LOG, "a") as _log:
-            import json
-            _log.write(json.dumps({"id":"log_fitz","timestamp":__import__("time").time()*1000,"location":"resume.py:after_fitz","message":"PDF extraction done","data":{"text_len":len(extracted_text) if extracted_text else 0},"hypothesisId":"H2"})+"\n")
+        _dbg("fitz_ok", {"text_len": len(extracted_text) if extracted_text else 0}, "H2")
     except Exception as e:
-        try:
-            with open(_DEBUG_LOG, "a") as _log:
-                import json, traceback
-                _log.write(json.dumps({"id":"log_fitz_err","timestamp":__import__("time").time()*1000,"location":"resume.py:fitz","message":"fitz failed","data":{"error":str(e),"tb":traceback.format_exc()},"hypothesisId":"H2"})+"\n")
-        except Exception:
-            pass
+        import traceback
+        _dbg("fitz_err", {"error": str(e)[:200]}, "H2")
         raise
     # #endregion
 
@@ -130,6 +130,9 @@ async def upload_resume(
         }
     except ProgrammingError as e:
         err_msg = str(e.orig) if hasattr(e, "orig") and e.orig else str(e)
+        # #region agent log
+        _dbg("H1_prog_err", {"err_msg": err_msg[:200], "has_resume_files": "resume_files" in err_msg, "has_does_not_exist": "does not exist" in err_msg}, "H1")
+        # #endregion
         if "does not exist" in err_msg or "resume_files" in err_msg:
             raise HTTPException(
                 status_code=503,
@@ -138,12 +141,8 @@ async def upload_resume(
         raise
     except Exception as e:
         # #region agent log
-        try:
-            with open(_DEBUG_LOG, "a") as _log:
-                import json, traceback
-                _log.write(json.dumps({"id":"log_db_err","timestamp":__import__("time").time()*1000,"location":"resume.py:db_exc","message":"DB/upload error","data":{"error":str(e),"tb":traceback.format_exc()},"hypothesisId":"H1,H3,H4"})+"\n")
-        except Exception:
-            pass
+        import traceback
+        _dbg("db_upload_err", {"error": str(e)[:200], "type": type(e).__name__}, "H1,H3,H4")
         # #endregion
         raise
 

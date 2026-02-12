@@ -38,6 +38,22 @@ async def lifespan(app: FastAPI):
     stop_scheduler()
 
 
+class DebugResumeMiddleware(BaseHTTPMiddleware):
+    """Log when POST /api/resume/upload reaches the app (H2/H5: infra vs app 503)."""
+    async def dispatch(self, request: Request, call_next):  # type: ignore[override]
+        if request.method == "POST" and "/api/resume" in request.url.path and "upload" in request.url.path:
+            logger.info("[DEBUG] POST resume/upload received hypothesis=H2,H5 path=%s", request.url.path)
+            try:
+                from pathlib import Path
+                import json, time
+                _p = Path(__file__).resolve().parent.parent / ".cursor" / "debug.log"
+                with open(_p, "a") as f:
+                    f.write(json.dumps({"id":"resume_upload_req","timestamp":time.time()*1000,"location":"main.py:middleware","message":"POST resume/upload received","data":{"path":request.url.path},"hypothesisId":"H2,H5"}) + "\n")
+            except Exception:
+                pass
+        return await call_next(request)
+
+
 class TrailingSlashMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):  # type: ignore[override]
         if request.url.path != "/" and request.url.path.endswith("/"):
@@ -58,6 +74,7 @@ app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 app.add_middleware(TrailingSlashMiddleware)
+app.add_middleware(DebugResumeMiddleware)
 
 app.add_middleware(
     CORSMiddleware,

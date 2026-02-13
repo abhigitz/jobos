@@ -187,41 +187,41 @@ async def generate_topics(
     return created
 
 
-async def get_todays_prompt(db: AsyncSession, user_id: UUID) -> Optional[StoryPromptOut]:
-    today = datetime.now(timezone.utc).date()
+async def get_next_prompt(db: AsyncSession, user_id: UUID) -> Optional[StoryPromptOut]:
+    """Get the next unused story prompt for this user.
 
-    existing = await db.execute(
-        select(StoryPromptShown)
-        .where(StoryPromptShown.user_id == user_id)
-        .where(func.date(StoryPromptShown.shown_at) == today)
-        .order_by(StoryPromptShown.shown_at.desc())
-        .limit(1)
-    )
-    shown = existing.scalar_one_or_none()
-
-    if shown:
-        if shown.dismissed or shown.answered:
-            return None
-        return StoryPromptOut(prompt_text=shown.prompt_text)
-
-    recent = await db.execute(
+    Logic:
+    1. Find all prompts this user has answered (not just shown)
+    2. Pick a prompt they haven't answered yet
+    3. If all 50 are answered, pick the one answered longest ago
+    """
+    # Get all prompts this user has answered
+    answered_result = await db.execute(
         select(StoryPromptShown.prompt_text)
         .where(StoryPromptShown.user_id == user_id)
-        .where(StoryPromptShown.shown_at >= datetime.now(timezone.utc) - timedelta(days=30))
+        .where(StoryPromptShown.answered == True)
     )
-    recent_prompts = {r[0] for r in recent.all()}
+    answered_prompts = {r[0] for r in answered_result.all()}
 
-    available = [p for p in STORY_PROMPTS if p not in recent_prompts]
-    if not available:
-        available = STORY_PROMPTS
+    # Find prompts not yet answered
+    available = [p for p in STORY_PROMPTS if p not in answered_prompts]
 
-    prompt_text = random.choice(available)
+    if available:
+        # Pick random from available
+        prompt_text = random.choice(available)
+    else:
+        # All answered — pick the one answered longest ago
+        oldest_result = await db.execute(
+            select(StoryPromptShown.prompt_text)
+            .where(StoryPromptShown.user_id == user_id)
+            .where(StoryPromptShown.answered == True)
+            .order_by(StoryPromptShown.shown_at.asc())
+            .limit(1)
+        )
+        oldest = oldest_result.scalar_one_or_none()
+        prompt_text = oldest if oldest else STORY_PROMPTS[0]
 
-    new_shown = StoryPromptShown(user_id=user_id, prompt_text=prompt_text)
-    db.add(new_shown)
-    await db.commit()
-
-    return StoryPromptOut(prompt_text=prompt_text)
+    return StoryPromptOut(prompt_text=prompt_text, can_dismiss=False)
 
 
 def get_time_of_day(dt: datetime) -> str:
@@ -304,7 +304,7 @@ async def get_content_studio_home(
 
     stories_count = await get_stories_count(db, current_user.id)
 
-    story_prompt = await get_todays_prompt(db, current_user.id)
+    story_prompt = await get_next_prompt(db, current_user.id)
 
     cutoff = datetime.now(timezone.utc) - timedelta(hours=48)
     pending = await db.execute(
@@ -463,9 +463,12 @@ async def record_engagement(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    """Record or UPDATE engagement metrics for a post."""
     post = await db.get(ContentPost, request.post_id)
     if not post or post.user_id != current_user.id:
         raise HTTPException(404, "Post not found")
+
+    was_already_recorded = post.engagement_recorded_at is not None
 
     if request.impressions is not None:
         post.impressions = request.impressions
@@ -477,7 +480,12 @@ async def record_engagement(
 
     await db.commit()
 
-    return {"status": "recorded"}
+    return {
+        "status": "updated" if was_already_recorded else "recorded",
+        "impressions": post.impressions,
+        "reactions": post.reactions,
+        "comments": post.comments,
+    }
 
 
 @router.get("/history")
@@ -563,12 +571,50 @@ async def add_custom_topic(
     return TopicOut.model_validate(topic)
 
 
+@router.get("/categories")
+async def get_user_categories(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Get all categories this user has used (preset + custom)."""
+    PRESET_CATEGORIES = ["Growth", "Career", "Leadership", "GenAI", "Industry", "Personal"]
+
+    # Get custom categories from topics
+    topics_result = await db.execute(
+        select(ContentTopic.category)
+        .where(ContentTopic.user_id == current_user.id)
+        .distinct()
+    )
+    topic_categories = {r[0] for r in topics_result.all() if r[0]}
+
+    # Get categories from posts
+    posts_result = await db.execute(
+        select(ContentPost.topic_category)
+        .where(ContentPost.user_id == current_user.id)
+        .distinct()
+    )
+    post_categories = {r[0] for r in posts_result.all() if r[0]}
+
+    # Combine all unique categories
+    all_categories = set(PRESET_CATEGORIES) | topic_categories | post_categories
+
+    # Sort: presets first, then custom alphabetically
+    preset_set = set(PRESET_CATEGORIES)
+    custom = sorted([c for c in all_categories if c not in preset_set])
+
+    return {
+        "preset": PRESET_CATEGORIES,
+        "custom": custom,
+        "all": PRESET_CATEGORIES + custom,
+    }
+
+
 @router.get("/stories/today-prompt")
 async def get_today_prompt(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    prompt = await get_todays_prompt(db, current_user.id)
+    prompt = await get_next_prompt(db, current_user.id)
     return prompt
 
 
@@ -617,6 +663,7 @@ async def save_story(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    """Save a story response and return the next prompt."""
     story = UserStory(
         user_id=current_user.id,
         prompt_question=request.prompt_question,
@@ -626,17 +673,31 @@ async def save_story(
     )
     db.add(story)
 
-    today = datetime.now(timezone.utc).date()
-    await db.execute(
-        update(StoryPromptShown)
-        .where(StoryPromptShown.user_id == current_user.id)
-        .where(func.date(StoryPromptShown.shown_at) == today)
-        .values(answered=True)
+    # Mark this prompt as answered
+    prompt_record = StoryPromptShown(
+        user_id=current_user.id,
+        prompt_text=request.prompt_question,
+        answered=True,
+        dismissed=False,
     )
+    db.add(prompt_record)
 
     await db.commit()
-    count = await get_stories_count(db, current_user.id)
-    return {"status": "saved", "stories_count": count}
+
+    # Get count
+    count_result = await db.execute(
+        select(func.count(UserStory.id)).where(UserStory.user_id == current_user.id)
+    )
+    stories_count = count_result.scalar() or 0
+
+    # Get next prompt
+    next_prompt = await get_next_prompt(db, current_user.id)
+
+    return {
+        "status": "saved",
+        "stories_count": stories_count,
+        "next_prompt": next_prompt.prompt_text if next_prompt else None,
+    }
 
 
 @router.get("/stories")

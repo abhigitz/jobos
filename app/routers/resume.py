@@ -8,10 +8,11 @@ import fitz
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from fastapi.responses import StreamingResponse
 from sqlalchemy import func, select
-from sqlalchemy.exc import ProgrammingError
+from sqlalchemy.exc import ProgrammingError, SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
+from app.exceptions import AIServiceError
 from app.dependencies import get_current_user
 from app.models.resume import ResumeFile
 from app.services.activity_log import log_activity
@@ -128,6 +129,8 @@ async def upload_resume(
             "is_primary": resume.is_primary,
             "created_at": resume.created_at.isoformat(),
         }
+    except HTTPException:
+        raise
     except ProgrammingError as e:
         err_msg = str(e.orig) if hasattr(e, "orig") and e.orig else str(e)
         # #region agent log
@@ -139,11 +142,15 @@ async def upload_resume(
                 detail="resume_files table not found. Run: alembic upgrade head",
             ) from e
         raise
+    except (SQLAlchemyError, AIServiceError) as e:
+        logger.error("Resume upload failed: %s", e)
+        raise
     except Exception as e:
         # #region agent log
         import traceback
         _dbg("db_upload_err", {"error": str(e)[:200], "type": type(e).__name__}, "H1,H3,H4")
         # #endregion
+        logger.exception("Unexpected error during resume upload: %s", e)
         raise
 
 
@@ -176,14 +183,20 @@ async def list_resumes(
         ]
         _dbg("list_resumes_ok", {"count": len(out)}, "LIST")
         return out
+    except HTTPException:
+        raise
     except ProgrammingError as e:
         err_msg = str(e.orig) if hasattr(e, "orig") and e.orig else str(e)
         if "does not exist" in err_msg or "resume_files" in err_msg:
             _dbg("list_resumes_table_missing", {"err": err_msg[:100]}, "LIST")
             return []
         raise
+    except (SQLAlchemyError, AIServiceError) as e:
+        logger.error("List resumes failed: %s", e)
+        raise
     except Exception as e:
         _dbg("list_resumes_err", {"error": str(e)[:200], "type": type(e).__name__}, "LIST")
+        logger.exception("Unexpected error listing resumes: %s", e)
         raise
 
 

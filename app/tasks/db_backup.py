@@ -49,13 +49,13 @@ async def run_daily_backup() -> dict:
             proc.kill()
             await proc.wait()
             logger.error("Backup timed out after 5 minutes")
-            _notify_telegram_on_failure("Backup timed out after 5 minutes")
+            await _notify_telegram_on_failure("Backup timed out after 5 minutes")
             return {"success": False, "error": "Timeout"}
 
         if proc.returncode != 0:
             err_msg = stderr.decode() if stderr else "Unknown error"
             logger.error("Backup failed: %s", err_msg)
-            _notify_telegram_on_failure(err_msg)
+            await _notify_telegram_on_failure(err_msg)
             return {"success": False, "error": err_msg}
 
         # Get backup file size
@@ -78,11 +78,11 @@ async def run_daily_backup() -> dict:
 
     except Exception as e:
         logger.error("Backup error: %s", str(e), exc_info=True)
-        _notify_telegram_on_failure(str(e))
+        await _notify_telegram_on_failure(str(e))
         return {"success": False, "error": str(e)}
 
 
-def _notify_telegram_on_failure(error_msg: str) -> None:
+async def _notify_telegram_on_failure(error_msg: str) -> None:
     """Optionally notify owner via Telegram on backup failure."""
     try:
         settings = get_settings()
@@ -90,6 +90,6 @@ def _notify_telegram_on_failure(error_msg: str) -> None:
             from app.services.telegram_service import send_telegram_message
 
             msg = f"⚠️ *JobOS Backup Failed*\n\n{error_msg[:500]}"
-            asyncio.create_task(send_telegram_message(settings.owner_telegram_chat_id, msg))
+            await send_telegram_message(settings.owner_telegram_chat_id, msg)
     except Exception as e:
         logger.warning("Could not send Telegram notification: %s", e)

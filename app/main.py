@@ -40,23 +40,6 @@ async def lifespan(app: FastAPI):
     stop_scheduler()
 
 
-class DebugResumeMiddleware(BaseHTTPMiddleware):
-    """Log resume-related requests for debugging."""
-    async def dispatch(self, request: Request, call_next):  # type: ignore[override]
-        path = request.url.path
-        if "/api/resume" in path:
-            logger.info("[DEBUG] resume request method=%s path=%s", request.method, path)
-            try:
-                from pathlib import Path
-                import json, time
-                _p = Path(__file__).resolve().parent.parent / ".cursor" / "debug.log"
-                with open(_p, "a") as f:
-                    f.write(json.dumps({"id":"resume_req","timestamp":time.time()*1000,"method":request.method,"path":path}) + "\n")
-            except Exception as e:
-                logger.warning(f"Debug middleware failed to write log: {e}")
-        return await call_next(request)
-
-
 class TrailingSlashMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):  # type: ignore[override]
         if request.url.path != "/" and request.url.path.endswith("/"):
@@ -79,7 +62,6 @@ app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 app.add_middleware(TrailingSlashMiddleware)
-app.add_middleware(DebugResumeMiddleware)
 
 
 @app.middleware("http")
@@ -161,7 +143,7 @@ async def debug_unhandled_exception(request, exc):
     logger.exception("Unhandled exception: %s (path=%s)", exc, request.url.path)
     try:
         from pathlib import Path
-        _log_path = Path(__file__).resolve().parent.parent / "debug_resume.log"
+        _log_path = Path(__file__).resolve().parent / "debug_resume.log"
         with open(_log_path, "a") as _log:
             import json
             _log.write(json.dumps({"id":"log_unhandled","timestamp":__import__("time").time()*1000,"location":"main.py:exception_handler","message":"Unhandled exception","data":{"path":request.url.path,"error":str(exc),"tb":tb},"hypothesisId":"H1,H2,H3,H4,H5"})+"\n")

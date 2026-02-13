@@ -1,10 +1,14 @@
+import logging
 from datetime import date, datetime, timedelta, timezone
+from typing import Any
 
 from fastapi import APIRouter, Depends, Header, HTTPException
 from sqlalchemy import func, select
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import get_settings
+from app.exceptions import AIServiceError
 from app.database import get_db
 from app.models.company import Company
 from app.models.content import ContentCalendar
@@ -27,6 +31,7 @@ from app.services.telegram_service import send_telegram_message
 
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 settings = get_settings()
 
 
@@ -123,11 +128,11 @@ async def morning_briefing(
             text = await generate_morning_briefing(data)
             if text:
                 await send_telegram_message(user.telegram_chat_id, text)  # type: ignore[arg-type]
-        except Exception as e:  # noqa: BLE001
-            # log and continue to next user
-            import logging
-
-            logging.getLogger(__name__).error("morning briefing failed for user %s: %s", user.id, e)
+        except (HTTPException, SQLAlchemyError, AIServiceError) as e:
+            logger.error("morning briefing failed for user %s: %s", user.id, e)
+        except Exception as e:
+            logger.exception("Unexpected error in morning briefing for user %s: %s", user.id, e)
+            raise
     return {"status": "ok"}
 
 
@@ -148,10 +153,11 @@ async def midday_briefing(
             text = await generate_midday_check(data)
             if text:
                 await send_telegram_message(user.telegram_chat_id, text)  # type: ignore[arg-type]
-        except Exception as e:  # noqa: BLE001
-            import logging
-
-            logging.getLogger(__name__).error("midday briefing failed for user %s: %s", user.id, e)
+        except (HTTPException, SQLAlchemyError, AIServiceError) as e:
+            logger.error("midday briefing failed for user %s: %s", user.id, e)
+        except Exception as e:
+            logger.exception("Unexpected error in midday briefing for user %s: %s", user.id, e)
+            raise
     return {"status": "ok"}
 
 
@@ -171,10 +177,11 @@ async def evening_prompt(
                 "4. What's your top priority for tomorrow?"
             )
             await send_telegram_message(user.telegram_chat_id, text)  # type: ignore[arg-type]
-        except Exception as e:  # noqa: BLE001
-            import logging
-
-            logging.getLogger(__name__).error("evening prompt failed for user %s: %s", user.id, e)
+        except (HTTPException, SQLAlchemyError, AIServiceError) as e:
+            logger.error("evening prompt failed for user %s: %s", user.id, e)
+        except Exception as e:
+            logger.exception("Unexpected error in evening prompt for user %s: %s", user.id, e)
+            raise
     return {"status": "ok"}
 
 
@@ -251,10 +258,11 @@ async def content_draft_briefing(
                 item.status = "Drafted"
                 await db.commit()
                 await send_telegram_message(user.telegram_chat_id, draft)  # type: ignore[arg-type]
-        except Exception as e:  # noqa: BLE001
-            import logging
-
-            logging.getLogger(__name__).error("content draft briefing failed for user %s: %s", user.id, e)
+        except (HTTPException, SQLAlchemyError, AIServiceError) as e:
+            logger.error("content draft briefing failed for user %s: %s", user.id, e)
+        except Exception as e:
+            logger.exception("Unexpected error in content draft briefing for user %s: %s", user.id, e)
+            raise
     return {"status": "ok"}
 
 
@@ -291,10 +299,12 @@ async def weekly_review_briefing(
             text = await generate_weekly_review(data)
             if text:
                 await send_telegram_message(user.telegram_chat_id, text)  # type: ignore[arg-type]
-        except Exception as e:  # noqa: BLE001
-            import logging
-
-            logging.getLogger(__name__).error("weekly review briefing failed for user %s: %s", user.id, e)
+        except (HTTPException, SQLAlchemyError, AIServiceError) as e:
+            logger.error("weekly review briefing failed for user %s: %s", user.id, e)
+        except Exception as e:
+            logger.exception("Unexpected error in weekly review briefing for user %s: %s", user.id, e)
+            raise
+    return {"status": "ok"}
 
 
 @router.post("/company-deep-dive")
@@ -339,10 +349,11 @@ async def company_deep_dive_briefing(
             )
             await send_telegram_message(user.telegram_chat_id, text)  # type: ignore[arg-type]
             results.append({"user_id": str(user.id), "company": company.name})
-        except Exception as e:  # noqa: BLE001
-            import logging
-
-            logging.getLogger(__name__).error("company deep dive failed for user %s: %s", user.id, e)
+        except (HTTPException, SQLAlchemyError, AIServiceError) as e:
+            logger.error("company deep dive failed for user %s: %s", user.id, e)
+        except Exception as e:
+            logger.exception("Unexpected error in company deep dive for user %s: %s", user.id, e)
+            raise
     return {"success": True, "results": results}
 
 
@@ -439,10 +450,11 @@ async def jd_patterns_briefing(
                     lines.append(f"{idx}. {rec}")
 
             await send_telegram_message(user.telegram_chat_id, "\n".join(lines))  # type: ignore[arg-type]
-        except Exception as e:  # noqa: BLE001
-            import logging
-
-            logging.getLogger(__name__).error("jd patterns briefing failed for user %s: %s", user.id, e)
+        except (HTTPException, SQLAlchemyError, AIServiceError) as e:
+            logger.error("jd patterns briefing failed for user %s: %s", user.id, e)
+        except Exception as e:
+            logger.exception("Unexpected error in jd patterns briefing for user %s: %s", user.id, e)
+            raise
     return {"success": True}
 
 
@@ -514,10 +526,11 @@ async def interview_prep_briefing(
                     f"{prep_doc}"
                 )
                 await send_telegram_message(user.telegram_chat_id, text)  # type: ignore[arg-type]
-        except Exception as e:  # noqa: BLE001
-            import logging
-
-            logging.getLogger(__name__).error("interview prep briefing failed for user %s: %s", user.id, e)
+        except (HTTPException, SQLAlchemyError, AIServiceError) as e:
+            logger.error("interview prep briefing failed for user %s: %s", user.id, e)
+        except Exception as e:
+            logger.exception("Unexpected error in interview prep briefing for user %s: %s", user.id, e)
+            raise
     if not any_found:
         return {"success": True, "message": "No upcoming interviews"}
     return {"success": True}
@@ -561,8 +574,9 @@ async def market_intel_briefing(
                 "⚠️ Based on Claude's training data — verify time-sensitive claims before acting."
             )
             await send_telegram_message(user.telegram_chat_id, text)  # type: ignore[arg-type]
-        except Exception as e:  # noqa: BLE001
-            import logging
-
-            logging.getLogger(__name__).error("market intel briefing failed for user %s: %s", user.id, e)
+        except (HTTPException, SQLAlchemyError, AIServiceError) as e:
+            logger.error("market intel briefing failed for user %s: %s", user.id, e)
+        except Exception as e:
+            logger.exception("Unexpected error in market intel briefing for user %s: %s", user.id, e)
+            raise
     return {"success": True}

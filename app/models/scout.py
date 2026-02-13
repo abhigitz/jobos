@@ -8,7 +8,7 @@ from typing import Any, Dict, List, Optional
 
 from sqlalchemy import Boolean, Date, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint, func, text
 from sqlalchemy.dialects.postgresql import ARRAY, JSONB, UUID
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from .base import Base, IDMixin, TimestampMixin
 
@@ -43,6 +43,10 @@ class ScoutedJob(Base, IDMixin, TimestampMixin):
     )
     raw_json: Mapped[Optional[Dict[str, Any]]] = mapped_column(JSONB)
     search_query: Mapped[Optional[str]] = mapped_column(String(255))
+
+    user_scouted_jobs: Mapped[list["UserScoutedJob"]] = relationship(
+        "UserScoutedJob", back_populates="scouted_job"
+    )
 
 
 class UserScoutPreferences(Base, IDMixin, TimestampMixin):
@@ -99,6 +103,7 @@ class UserScoutedJob(Base, IDMixin, TimestampMixin):
     )
     added_to_pipeline_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
 
+    scouted_job: Mapped["ScoutedJob"] = relationship("ScoutedJob", back_populates="user_scouted_jobs")
     __table_args__ = (UniqueConstraint("user_id", "scouted_job_id", name="uq_user_scouted_jobs_user_scouted_job"),)
 
 

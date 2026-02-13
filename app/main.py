@@ -3,7 +3,18 @@ import time
 import uuid
 from contextlib import asynccontextmanager
 
+import sentry_sdk
+from app.config import get_settings
 from fastapi import Depends, FastAPI, HTTPException
+
+settings = get_settings()
+if settings.sentry_dsn:
+    sentry_sdk.init(
+        dsn=settings.sentry_dsn,
+        traces_sample_rate=0.1,
+        environment=settings.environment or "production",
+    )
+
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
@@ -53,7 +64,6 @@ class TrailingSlashMiddleware(BaseHTTPMiddleware):
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from app.dependencies import limiter
-from app.config import get_settings
 from app.database import get_db
 
 app = FastAPI(title="JobOS API", version="0.2.0", lifespan=lifespan, redirect_slashes=False)
@@ -79,13 +89,12 @@ async def log_requests(request: Request, call_next):
     response.headers["X-Request-ID"] = request_id
     return response
 
-_settings = get_settings()
 app.add_middleware(
     CORSMiddleware,
     allow_origins=(
-        [_settings.frontend_url, "http://localhost:3000"]
-        if _settings.debug
-        else [_settings.frontend_url]
+        [settings.frontend_url, "http://localhost:3000"]
+        if settings.debug
+        else [settings.frontend_url]
     ),
     allow_credentials=True,
     allow_methods=["*"],
@@ -150,7 +159,6 @@ async def debug_unhandled_exception(request, exc):
     except Exception:
         pass
     from starlette.responses import JSONResponse
-    settings = get_settings()
     if settings.debug:
         return JSONResponse(status_code=500, content={"detail": str(exc), "traceback": tb})
     return JSONResponse(status_code=500, content={"detail": "Internal server error"})

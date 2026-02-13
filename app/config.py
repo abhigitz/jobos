@@ -24,6 +24,8 @@ class Settings(BaseSettings):
     serper_api_key: str = ""
     adzuna_app_id: str = ""
     adzuna_api_key: str = ""
+    sentry_dsn: str | None = None
+    environment: str = "production"
 
     # AI Model Configuration
     ai_model_default: str = "claude-sonnet-4-20250514"

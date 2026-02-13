@@ -541,20 +541,32 @@ async def generate_content_studio_topics(
 
     number_guidance = ""
     if avoid_specific_numbers:
-        number_guidance = """
-IMPORTANT - AVOID SPECIFIC NUMBERS IN TOPICS:
-- DON'T say: "$7M budget", "$200M ARR", "40-person team"
-- DO say: "large-scale budget", "significant growth", "leading a team"
-- Keep topics about LESSONS, not achievements
+        number_guidance = """CRITICAL NUMBER AVOIDANCE RULES (apply to every topic):
+
+NEVER mention specific dollar amounts ($7M, $200M, $1.5B, etc.)
+NEVER mention specific percentages (40%, 13%, etc.)
+NEVER mention specific team sizes (40-person team, 150+ workforce)
+NEVER mention specific timeframes with numbers (2.5 years, 6 months)
+
+INSTEAD USE:
+
+"multi-million dollar budgets" instead of "$7M"
+"significant revenue growth" instead of "$200M ARR"
+"large cross-functional teams" instead of "40-person team"
+"rapid scaling" instead of "10x growth"
+
+If the user's profile contains specific numbers, ABSTRACT them. The topics should be about THEMES, not specific metrics from the user's resume.
+
+---
+
 """
 
-    prompt = f"""Generate 7 LinkedIn post topics for this profile.
+    prompt = f"""{number_guidance}Generate 7 LinkedIn post topics for this profile.
 
 PROFILE:
 {json.dumps(profile, indent=2, default=str)}
 
 CATEGORIES TO USE (pick from): {cats_str}
-{number_guidance}
 {recent_context}
 
 Return ONLY valid JSON:

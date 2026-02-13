@@ -180,8 +180,3 @@ async def health_check(db=Depends(get_db)):
 
     return health
 
-
-@app.get("/api/test-sentry")
-async def test_sentry():
-    raise Exception("Sentry test error - delete this endpoint after testing")
-

@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import get_settings
 from app.models.company import Company
 from app.models.scout import ScoutedJob, UserScoutedJob, UserScoutPreferences
+from app.services.ats_scrapers import fetch_target_company_jobs
 from app.services.scout_preferences import get_or_create_preferences
 from app.services.scout_scoring import score_job
 from app.services.serpapi_service import fetch_jobs_from_serpapi, normalize_company
@@ -107,18 +108,33 @@ async def run_job_scout() -> dict:
     start = datetime.now(timezone.utc)
     logger.info(f"Job Scout starting at {start.isoformat()}")
 
-    if not settings.serpapi_key:
-        logger.warning("Job Scout: serpapi_key not configured, skipping")
-        return {"fetched": 0, "new": 0, "updated": 0, "stale_marked": 0, "matches": {}}
+    # SerpAPI is optional; we also fetch from ATS (Greenhouse/Lever)
 
     stats = {"fetched": 0, "new": 0, "updated": 0, "stale_marked": 0, "matches": {}}
 
     async with get_task_session() as db:
-        # 1. Fetch jobs from SerpAPI
-        jobs = await fetch_jobs_from_serpapi()
-        stats["fetched"] = len(jobs)
-        logger.info(f"Job Scout: fetched {len(jobs)} jobs from SerpAPI")
+        # 1. Fetch jobs from SerpAPI (if configured)
+        serp_jobs: list[dict] = []
+        if settings.serpapi_key:
+            serp_jobs = await fetch_jobs_from_serpapi()
+        else:
+            logger.warning("Job Scout: serpapi_key not configured, skipping SerpAPI fetch")
+        logger.info(f"Job Scout: fetched {len(serp_jobs)} jobs from SerpAPI")
 
+        # 2. Fetch jobs from target companies (Greenhouse, Lever)
+        ats_jobs = await fetch_target_company_jobs()
+        logger.info(f"Job Scout: fetched {len(ats_jobs)} jobs from ATS (Greenhouse/Lever)")
+
+        # 3. Merge and deduplicate by dedup_hash
+        seen_hashes: set[str] = set()
+        jobs: list[dict] = []
+        for job in serp_jobs + ats_jobs:
+            h = job.get("dedup_hash")
+            if h and h not in seen_hashes:
+                seen_hashes.add(h)
+                jobs.append(job)
+
+        stats["fetched"] = len(jobs)
         if not jobs:
             logger.info("Job Scout: no jobs returned, skipping upsert and matching")
             return stats
@@ -131,7 +147,7 @@ async def run_job_scout() -> dict:
             if norm and norm not in company_norm_to_id:
                 company_norm_to_id[norm] = row.id
 
-        # 2. Upsert jobs to scouted_jobs
+        # 4. Upsert jobs to scouted_jobs
         now = datetime.now(timezone.utc)
         for job_dict in jobs:
             job_dict["last_seen_at"] = now
@@ -148,7 +164,7 @@ async def run_job_scout() -> dict:
 
         await db.commit()
 
-        # 3. Mark stale jobs (not seen in 7+ days)
+        # 5. Mark stale jobs (not seen in 7+ days)
         stale_cutoff = now - timedelta(days=7)
         stale_result = await db.execute(
             select(ScoutedJob).where(
@@ -165,7 +181,7 @@ async def run_job_scout() -> dict:
         if stale_jobs:
             logger.info(f"Job Scout: marked {len(stale_jobs)} jobs as stale (not_seen_7d)")
 
-        # 4. Match jobs to users
+        # 6. Match jobs to users
         # Get users with scout preferences
         prefs_result = await db.execute(select(UserScoutPreferences.user_id).distinct())
         user_ids = [r[0] for r in prefs_result.all()]
@@ -222,7 +238,7 @@ async def run_job_scout() -> dict:
 
         await db.commit()
 
-    # 5. Send summary to Telegram (optional)
+    # 7. Send summary to Telegram (optional)
     chat_id = settings.owner_telegram_chat_id
     total_matches = sum(stats["matches"].values())
     if chat_id and settings.telegram_bot_token:
@@ -247,13 +263,8 @@ async def run_job_scout() -> dict:
 
 
 async def job_scout_task() -> None:
-    """Runs daily at 8:00 AM IST. Discovers jobs from SerpAPI and matches to users."""
+    """Runs daily at 8:00 AM IST. Discovers jobs from SerpAPI and ATS (Greenhouse/Lever), matches to users."""
     settings = get_settings()
-
-    if not settings.serpapi_key:
-        logger.warning("Job Scout: serpapi_key not configured, skipping")
-        return
-
     try:
         stats = await run_job_scout()
         logger.info(

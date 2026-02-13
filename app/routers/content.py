@@ -1,6 +1,6 @@
 import json
 import logging
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -306,7 +306,7 @@ async def shuffle_content(
 
     content.draft_text = new_post
     content.status = "Drafted"
-    content.updated_at = datetime.utcnow()
+    content.updated_at = datetime.now(timezone.utc)
     await db.commit()
     await db.refresh(content)
 
@@ -327,7 +327,7 @@ async def save_draft(
 
     content.draft_text = payload.get("draft_text", content.draft_text)
     content.status = "Drafted"
-    content.updated_at = datetime.utcnow()
+    content.updated_at = datetime.now(timezone.utc)
     await db.commit()
 
     return {"message": "Draft saved"}

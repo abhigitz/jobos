@@ -9,6 +9,7 @@ from anthropic import AsyncAnthropic
 from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
 
 from app.config import get_settings
+from app.exceptions import AIServiceError
 from app.utils.json_parser import parse_json_response
 
 logger = logging.getLogger(__name__)
@@ -66,7 +67,7 @@ LEVEL_CONTEXT = {
     wait=wait_exponential(multiplier=1, min=2, max=10),
     retry=retry_if_exception_type((anthropic.RateLimitError, anthropic.InternalServerError)),
 )
-async def call_claude(prompt: str, max_tokens: int = 2000, task_type: str = "default") -> str | None:
+async def call_claude(prompt: str, max_tokens: int = 2000, task_type: str = "default") -> str:
     try:
         message = await client.messages.create(
             model=_get_model(task_type),
@@ -77,8 +78,8 @@ async def call_claude(prompt: str, max_tokens: int = 2000, task_type: str = "def
     except (anthropic.RateLimitError, anthropic.InternalServerError):
         raise
     except anthropic.APIError as e:
-        logger.error(f"Claude API error: {e}")
-        return None
+        logger.error("Claude API error: %s", e)
+        raise AIServiceError(f"Claude API error: {e}", cause=e) from e
 
 
 @retry_on_failure(max_retries=3)

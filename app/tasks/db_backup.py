@@ -2,7 +2,7 @@
 import asyncio
 import logging
 import os
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 
 from app.config import get_settings
@@ -27,7 +27,7 @@ async def run_daily_backup() -> dict:
         BACKUP_DIR.mkdir(parents=True, exist_ok=True)
 
         # Generate backup filename with timestamp
-        timestamp = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
+        timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
         backup_file = BACKUP_DIR / f"jobos_backup_{timestamp}.sql"
 
         settings = get_settings()

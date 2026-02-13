@@ -1,4 +1,4 @@
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, Header, HTTPException
 from sqlalchemy import func, select
@@ -329,7 +329,7 @@ async def company_deep_dive_briefing(
 
             company.deep_dive_content = deep_dive
             company.deep_dive_done = True
-            company.last_researched = datetime.utcnow()
+            company.last_researched = datetime.now(timezone.utc)
             await db.commit()
 
             text = (
@@ -352,7 +352,7 @@ async def jd_patterns_briefing(
     db: AsyncSession = Depends(get_db),
 ):
     users = await _active_users(db)
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
     fourteen_days_ago = now - timedelta(days=14)
     for user in users:
         try:
@@ -452,7 +452,7 @@ async def interview_prep_briefing(
     db: AsyncSession = Depends(get_db),
 ):
     users = await _active_users(db)
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
     window_end = now + timedelta(hours=48)
     any_found = False
     for user in users:

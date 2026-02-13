@@ -1,4 +1,27 @@
-"""Scoring engine for job scouting — ranks jobs based on user preferences."""
+"""
+Job Scout Scoring Engine
+
+Scoring weights (adjust these to tune matching quality):
+- TITLE_MATCH_EXACT: 40 points - Exact role match
+- TITLE_MATCH_MULTI: 25 points - 2+ keywords match
+- TITLE_MATCH_SINGLE: 15 points - 1 keyword match
+- COMPANY_MATCH_TARGET: 25 points - Target company
+- COMPANY_MATCH_INDUSTRY: 15 points - Target industry
+- LOCATION_MATCH: 15 points - Target city or remote
+- SALARY_MATCH_FULL: 10 points - Meets minimum
+- SALARY_MATCH_PARTIAL: 5 points - Within 85% of minimum
+- KEYWORD_MATCH: 1 point each - Role keywords in description
+- RECENCY_1DAY: 5 points, 3DAY: 3 points, 7DAY: 1 point
+
+Current observation: Most jobs score 30-37. To get more selective:
+- Increase TITLE_MATCH_EXACT to 50
+- Increase COMPANY_MATCH_TARGET to 30
+- Raise min_score threshold to 40
+
+To get more inclusive:
+- Lower min_score to 25
+- Increase KEYWORD_MATCH to 2 points each
+"""
 
 from __future__ import annotations
 

@@ -18,7 +18,7 @@ class ScoutedJob(Base, IDMixin, TimestampMixin):
 
     __tablename__ = "scouted_jobs"
 
-    external_id: Mapped[Optional[str]] = mapped_column(String(255))
+    external_id: Mapped[Optional[str]] = mapped_column(Text)
     dedup_hash: Mapped[Optional[str]] = mapped_column(String(64), unique=True)
     title: Mapped[str] = mapped_column(String(500), nullable=False)
     company_name: Mapped[str] = mapped_column(String(255), nullable=False)
@@ -30,8 +30,8 @@ class ScoutedJob(Base, IDMixin, TimestampMixin):
     salary_max: Mapped[Optional[int]] = mapped_column(Integer)
     salary_is_estimated: Mapped[bool] = mapped_column(Boolean, default=False)
     source: Mapped[str] = mapped_column(String(50), nullable=False)
-    source_url: Mapped[Optional[str]] = mapped_column(String(2000))
-    apply_url: Mapped[Optional[str]] = mapped_column(String(2000))
+    source_url: Mapped[Optional[str]] = mapped_column(Text)
+    apply_url: Mapped[Optional[str]] = mapped_column(Text)
     posted_date: Mapped[Optional[date]] = mapped_column(Date())
     scouted_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     last_seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)

@@ -112,6 +112,7 @@ app.add_middleware(
 
 from .routers import (  # noqa: E402
     activity,
+    admin,
     analytics,
     auth,
     briefing,
@@ -131,6 +132,7 @@ from .routers import (  # noqa: E402
 )
 
 app.include_router(activity.router, prefix="/api/activity", tags=["activity"])
+app.include_router(admin.router, prefix="/api/admin", tags=["admin"])
 app.include_router(auth.router, prefix="/api/auth", tags=["auth"])
 app.include_router(profile.router, prefix="/api/profile", tags=["profile"])
 app.include_router(resume.router, prefix="/api/resume", tags=["resume"])

@@ -34,9 +34,6 @@ from app.services.activity_log import log_activity
 from app.config import get_settings
 from app.services.ai_service import analyze_jd, call_claude, deep_resume_analysis
 from app.services.jd_extractor import extract_jd_from_url
-from app.services.serpapi_service import SerpAPIClient
-
-
 router = APIRouter()
 
 
@@ -614,18 +611,6 @@ async def deep_resume_analysis_endpoint(
             await db.commit()
 
     return {"analysis": analysis, "job_id": payload.job_id}
-
-
-@router.get("/test-serpapi")
-async def test_serpapi():
-    """Temporary test endpoint for SerpAPI job scouting. Returns 5 results for 'VP Growth Bangalore'."""
-    client = SerpAPIClient()
-    jobs = await client.search_jobs(
-        query="VP Growth Bangalore",
-        location="India",
-        num_results=5,
-    )
-    return {"count": len(jobs), "jobs": jobs}
 
 
 @router.get("/search")

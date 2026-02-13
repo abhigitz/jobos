@@ -12,7 +12,7 @@ from app.database import get_db
 from app.dependencies import get_current_user, limiter
 from app.models.content import ContentCalendar
 from app.models.profile import ProfileDNA
-from app.schemas.content import ContentCreate, ContentOut, ContentUpdate
+from app.schemas.content import ContentCreate, ContentOut, ContentUpdate, GenerateDraftRequest
 from app.services.ai_service import call_claude, generate_content_draft, parse_json_response
 from app.services.activity_log import log_activity
 
@@ -356,10 +356,11 @@ async def update_content_item(
 @limiter.limit("50/hour")
 async def generate_draft(
     request: Request,
-    payload: ContentCreate,
+    payload: GenerateDraftRequest,
     db: AsyncSession = Depends(get_db),
     current_user=Depends(get_current_user),
 ):
+    """Generate AI draft for a topic. Updates existing item if found (by content_id or scheduled_date+topic)."""
     prof_res = await db.execute(select(ProfileDNA).where(ProfileDNA.user_id == current_user.id))
     profile = prof_res.scalar_one_or_none()
     profile_dict = {}
@@ -374,6 +375,36 @@ async def generate_draft(
     if draft is None:
         raise HTTPException(status_code=503, detail="AI draft generation failed")
 
+    item = None
+
+    # 1. If content_id provided, update that specific item
+    if payload.content_id:
+        item = await db.get(ContentCalendar, payload.content_id)
+        if item and item.user_id != current_user.id:
+            item = None
+
+    # 2. Else look for existing item by (user_id, scheduled_date, topic)
+    if item is None:
+        existing = await db.execute(
+            select(ContentCalendar).where(
+                ContentCalendar.user_id == current_user.id,
+                ContentCalendar.scheduled_date == payload.scheduled_date,
+                ContentCalendar.topic == payload.topic,
+            ).order_by(ContentCalendar.created_at)
+        )
+        item = existing.scalars().first()
+
+    if item is not None:
+        # UPDATE existing item
+        item.draft_text = draft
+        item.status = "Drafted"
+        if payload.category is not None:
+            item.category = payload.category
+        await db.commit()
+        await db.refresh(item)
+        return {"id": str(item.id), "draft_text": draft}
+
+    # 3. No existing item: INSERT new (e.g. custom topic from external source)
     item = ContentCalendar(
         user_id=current_user.id,
         scheduled_date=payload.scheduled_date,

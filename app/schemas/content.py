@@ -11,6 +11,11 @@ class ContentCreate(BaseModel):
     category: Optional[str] = Field(None, max_length=50)
 
 
+class GenerateDraftRequest(ContentCreate):
+    """Request for generate-draft. Optional content_id targets a specific item to update."""
+    content_id: Optional[UUID] = None
+
+
 class ContentUpdate(BaseModel):
     topic: Optional[str] = None
     category: Optional[str] = None

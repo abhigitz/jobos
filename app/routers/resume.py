@@ -2,6 +2,7 @@
 import io
 import logging
 import os
+import tempfile
 from pathlib import Path
 from uuid import UUID
 
@@ -24,8 +25,8 @@ router = APIRouter()
 
 MAX_FILE_SIZE = 5 * 1024 * 1024  # 5MB
 ALLOWED_MIME = "application/pdf"
-_DEBUG_LOG = Path(__file__).resolve().parents[2] / "debug_resume.log"
-_DBG = Path(__file__).resolve().parents[2] / ".cursor" / "debug.log"
+_DEBUG_LOG = Path(tempfile.gettempdir()) / "jobos_resume_debug.log"
+_DBG = Path(tempfile.gettempdir()) / "jobos_resume_debug.log"
 
 
 def _dbg(msg: str, data: dict, hypothesis_id: str) -> None:
@@ -136,7 +137,6 @@ async def upload_resume(
             db, current_user.id, "resume_uploaded",
             f"Uploaded resume v{next_version}: {resume.filename}",
         )
-        await db.commit()
 
         return {
             "id": str(resume.id),
@@ -272,7 +272,6 @@ async def set_primary_resume(
         db, current_user.id, "resume_primary_set",
         f"Set resume v{resume.version} as primary",
     )
-    await db.commit()
 
     return {"id": str(resume.id), "is_primary": True}
 
@@ -295,6 +294,5 @@ async def delete_resume(
         db, current_user.id, "resume_deleted",
         f"Deleted resume v{resume.version}: {resume.filename}",
     )
-    await db.commit()
 
     return {"status": "deleted"}

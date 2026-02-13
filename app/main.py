@@ -1,7 +1,9 @@
 import logging
+import tempfile
 import time
 import uuid
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 import sentry_sdk
 from app.config import get_settings
@@ -197,8 +199,7 @@ async def debug_unhandled_exception(request, exc):
     tb = traceback.format_exc()
     logger.exception("Unhandled exception: %s (path=%s)", exc, request.url.path)
     try:
-        from pathlib import Path
-        _log_path = Path(__file__).resolve().parent / "debug_resume.log"
+        _log_path = Path(tempfile.gettempdir()) / "jobos_debug.log"
         with open(_log_path, "a") as _log:
             import json
             _log.write(json.dumps({"id":"log_unhandled","timestamp":__import__("time").time()*1000,"location":"main.py:exception_handler","message":"Unhandled exception","data":{"path":request.url.path,"error":str(exc),"tb":tb},"hypothesisId":"H1,H2,H3,H4,H5"})+"\n")

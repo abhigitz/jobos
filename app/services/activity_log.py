@@ -21,4 +21,4 @@ async def log_activity(
         related_contact_id=related_contact_id,
     )
     db.add(entry)
-    await db.flush()
+    await db.commit()

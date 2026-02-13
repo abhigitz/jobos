@@ -345,7 +345,7 @@ async def generate_post(
 ):
     topic = await db.get(ContentTopic, request.topic_id)
     if not topic or topic.user_id != current_user.id:
-        raise HTTPException(404, "Topic not found")
+        raise HTTPException(status_code=404, detail="Topic not found")
 
     stories = await db.execute(
         select(UserStory)
@@ -368,7 +368,7 @@ async def generate_post(
     )
 
     if draft is None:
-        raise HTTPException(503, "AI generation failed")
+        raise HTTPException(status_code=503, detail="AI generation failed")
 
     return GeneratePostResponse(
         draft_text=draft,
@@ -387,7 +387,7 @@ async def regenerate_post(
 ):
     topic = await db.get(ContentTopic, request.topic_id)
     if not topic or topic.user_id != current_user.id:
-        raise HTTPException(404, "Topic not found")
+        raise HTTPException(status_code=404, detail="Topic not found")
 
     stories = await db.execute(
         select(UserStory)
@@ -409,7 +409,7 @@ async def regenerate_post(
     )
 
     if draft is None:
-        raise HTTPException(503, "AI generation failed")
+        raise HTTPException(status_code=503, detail="AI generation failed")
 
     return GeneratePostResponse(
         draft_text=draft,
@@ -466,7 +466,7 @@ async def record_engagement(
     """Record or UPDATE engagement metrics for a post."""
     post = await db.get(ContentPost, request.post_id)
     if not post or post.user_id != current_user.id:
-        raise HTTPException(404, "Post not found")
+        raise HTTPException(status_code=404, detail="Post not found")
 
     was_already_recorded = post.engagement_recorded_at is not None
 
@@ -545,7 +545,7 @@ async def dismiss_topic(
 ):
     topic = await db.get(ContentTopic, topic_id)
     if not topic or topic.user_id != current_user.id:
-        raise HTTPException(404, "Topic not found")
+        raise HTTPException(status_code=404, detail="Topic not found")
     topic.status = "dismissed"
     await db.commit()
     return {"status": "dismissed"}

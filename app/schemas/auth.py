@@ -1,6 +1,6 @@
 from uuid import UUID
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, EmailStr, Field, field_validator
 import re
 
 
@@ -15,7 +15,7 @@ def validate_password_strength(v: str) -> str:
 
 
 class RegisterRequest(BaseModel):
-    email: str = Field(..., max_length=255)
+    email: EmailStr = Field(..., max_length=255)
     password: str = Field(..., min_length=8, max_length=128)
     full_name: str = Field(..., max_length=255)
 

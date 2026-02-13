@@ -16,6 +16,7 @@ from .email_verification_token import EmailVerificationToken
 from .password_reset_token import PasswordResetToken
 from .resume import ResumeFile
 from .scout_result import ScoutResult
+from .scout import ScoutedJob, UserScoutPreferences, UserScoutedJob, CompanyCareerSource
 from .story_prompt_shown import StoryPromptShown
 from .user_content_settings import UserContentSettings
 from .user_story import UserStory
@@ -40,6 +41,10 @@ __all__ = [
     "PasswordResetToken",
     "ResumeFile",
     "ScoutResult",
+    "ScoutedJob",
+    "UserScoutPreferences",
+    "UserScoutedJob",
+    "CompanyCareerSource",
     "StoryPromptShown",
     "UserContentSettings",
     "UserStory",

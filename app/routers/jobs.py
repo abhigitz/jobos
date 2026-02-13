@@ -207,7 +207,7 @@ async def get_due_followups(
     db: AsyncSession = Depends(get_db),
     current_user=Depends(get_current_user),
 ):
-    """Get jobs with followups due. Includes explicit followup_date plus auto-derived (Applied >7d, Interview >3d)."""
+    """Get jobs and contacts with followups due. Jobs: explicit followup_date plus auto-derived (Applied >7d, Interview >3d). Contacts: follow_up_date <= today."""
     now = datetime.now(timezone.utc)
     today = now.date()
     seven_days_ago = today - timedelta(days=7)
@@ -254,27 +254,54 @@ async def get_due_followups(
             seen.add(job.id)
             unique.append(job)
 
-    jobs = unique[:20]
+    job_list = unique[:20]
 
-    return [
-        {
-            "id": str(j.id),
-            "title": j.role_title,
-            "company_name": j.company_name,
-            "followup_date": j.followup_date.isoformat() if j.followup_date else None,
-            "status": j.status,
-            "days_until": (
-                (j.followup_date - today).days
-                if j.followup_date
-                else (
-                    (j.updated_at.date() - today).days
-                    if j.status == "Interview" and j.updated_at
-                    else (j.applied_date - today).days if j.applied_date else 0
-                )
-            ),
-        }
-        for j in jobs
-    ]
+    # Contacts with follow_up_date due (today or overdue)
+    contact_result = await db.execute(
+        select(Contact)
+        .where(Contact.user_id == current_user.id)
+        .where(Contact.is_deleted.is_(False))
+        .where(Contact.follow_up_date.isnot(None))
+        .where(Contact.follow_up_date <= today)
+        .order_by(Contact.follow_up_date.asc())
+        .limit(20)
+    )
+    contact_list = contact_result.scalars().all()
+
+    return {
+        "jobs": [
+            {
+                "id": str(j.id),
+                "type": "job",
+                "title": j.role_title,
+                "company_name": j.company_name,
+                "followup_date": j.followup_date.isoformat() if j.followup_date else None,
+                "status": j.status,
+                "days_until": (
+                    (j.followup_date - today).days
+                    if j.followup_date
+                    else (
+                        (j.updated_at.date() - today).days
+                        if j.status == "Interview" and j.updated_at
+                        else (j.applied_date - today).days if j.applied_date else 0
+                    )
+                ),
+            }
+            for j in job_list
+        ],
+        "contacts": [
+            {
+                "id": str(c.id),
+                "type": "contact",
+                "title": c.name,
+                "company_name": c.company or "",
+                "followup_date": c.follow_up_date.isoformat() if c.follow_up_date else None,
+                "status": "Contact",
+                "days_until": (c.follow_up_date - today).days if c.follow_up_date else 0,
+            }
+            for c in contact_list
+        ],
+    }
 
 
 @router.get("/followups")

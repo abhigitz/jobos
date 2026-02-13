@@ -25,6 +25,7 @@ class Settings(BaseSettings):
     adzuna_app_id: str = ""
     adzuna_api_key: str = ""
     sentry_dsn: str | None = None
+    redis_url: str | None = None
     environment: str = "production"
 
     # AI Model Configuration

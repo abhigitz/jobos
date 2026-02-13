@@ -1,12 +1,21 @@
 """APScheduler setup for JobOS background tasks."""
 import logging
 
+from apscheduler.jobstores.redis import RedisJobStore
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 
+from app.config import get_settings
+
 logger = logging.getLogger(__name__)
 
-scheduler = AsyncIOScheduler()
+settings = get_settings()
+
+jobstores = {}
+if settings.redis_url:
+    jobstores["default"] = RedisJobStore(url=settings.redis_url)
+
+scheduler = AsyncIOScheduler(jobstores=jobstores)
 
 
 def register_jobs() -> None:

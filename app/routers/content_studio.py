@@ -267,7 +267,7 @@ async def get_stories_count(db: AsyncSession, user_id: UUID) -> int:
     return result.scalar() or 0
 
 
-@router.get("/", response_model=ContentStudioHome)
+@router.get("", response_model=ContentStudioHome)
 async def get_content_studio_home(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),

@@ -2,13 +2,17 @@ from __future__ import annotations
 
 import uuid
 from datetime import datetime, timezone
-from typing import Optional
+from typing import TYPE_CHECKING, Optional
 
 from sqlalchemy import DateTime, ForeignKey, String, Text
 from sqlalchemy.dialects.postgresql import UUID
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from .base import Base, IDMixin
+
+if TYPE_CHECKING:
+    from .contact import Contact
+    from .job import Job
 
 
 class ActivityLog(Base, IDMixin):
@@ -27,4 +31,9 @@ class ActivityLog(Base, IDMixin):
     )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
+    )
+
+    job: Mapped[Optional["Job"]] = relationship("Job", foreign_keys=[related_job_id], lazy="selectin")
+    contact: Mapped[Optional["Contact"]] = relationship(
+        "Contact", foreign_keys=[related_contact_id], lazy="selectin"
     )

@@ -65,9 +65,9 @@ async def get_current_user_or_n8n(
 
     # Check n8n secret first
     n8n_secret = request.headers.get("X-N8N-Secret")
-    if n8n_secret and n8n_secret == settings.n8n_secret:
+    if n8n_secret and n8n_secret == settings.n8n_secret and settings.owner_email:
         result = await db.execute(
-            select(User).where(User.email == "abhinav.jain.iitd@gmail.com")
+            select(User).where(User.email == settings.owner_email)
         )
         user = result.scalar_one_or_none()
         if user:

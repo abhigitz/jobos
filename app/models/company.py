@@ -34,5 +34,5 @@ class Company(Base, IDMixin, TimestampMixin):
     notes: Mapped[Optional[str]] = mapped_column(Text)
 
     __table_args__ = (
-        CheckConstraint("lane IN (1, 2, 3)", name="ck_companies_lane_valid"),
+        CheckConstraint("lane IN (1, 2, 3, 4, 5)", name="ck_companies_lane_valid"),
     )

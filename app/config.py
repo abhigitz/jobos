@@ -16,6 +16,7 @@ class Settings(BaseSettings):
     resend_api_key: str = ""
     email_from: str = "JobOS <onboarding@resend.dev>"
     frontend_url: str = "http://localhost:3000"
+    debug: bool = False
     owner_telegram_chat_id: int = 0
     owner_email: str = ""
     owner_phone: str = ""

@@ -68,6 +68,7 @@ class TrailingSlashMiddleware(BaseHTTPMiddleware):
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from app.dependencies import limiter
+from app.config import get_settings
 
 app = FastAPI(title="JobOS API", version="0.2.0", lifespan=lifespan, redirect_slashes=False)
 
@@ -77,9 +78,14 @@ app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 app.add_middleware(TrailingSlashMiddleware)
 app.add_middleware(DebugResumeMiddleware)
 
+_settings = get_settings()
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=(
+        [_settings.frontend_url, "http://localhost:3000"]
+        if _settings.debug
+        else [_settings.frontend_url]
+    ),
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -139,8 +145,10 @@ async def debug_unhandled_exception(request, exc):
     except Exception:
         pass
     from starlette.responses import JSONResponse
-    # Include traceback in response for debugging (client can inspect response body)
-    return JSONResponse(status_code=500, content={"detail": str(exc), "traceback": tb})
+    settings = get_settings()
+    if settings.debug:
+        return JSONResponse(status_code=500, content={"detail": str(exc), "traceback": tb})
+    return JSONResponse(status_code=500, content={"detail": "Internal server error"})
 
 
 @app.get("/api/health")

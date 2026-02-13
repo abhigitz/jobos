@@ -190,8 +190,13 @@ Return ONLY valid JSON array:
     if data is None:
         raise HTTPException(status_code=503, detail="AI generation returned invalid data")
 
-    # Handle both list and dict with "topics" key
-    topics = data if isinstance(data, list) else data.get("topics", [])
+    # Handle both list and dict with "topics" key (AI may return either)
+    if isinstance(data, list):
+        topics = data
+    elif isinstance(data, dict):
+        topics = data.get("topics", [])
+    else:
+        topics = []
 
     created_dates = []
     for i, topic_data in enumerate(topics):

@@ -246,20 +246,54 @@ async def get_due_followups(
     db: AsyncSession = Depends(get_db),
     current_user=Depends(get_current_user),
 ):
-    """Get jobs with followups due within N days."""
+    """Get jobs with followups due. Includes explicit followup_date plus auto-derived (Applied >7d, Interview >3d)."""
     now = datetime.now(timezone.utc)
-    cutoff = now.date() + timedelta(days=days)
+    today = now.date()
+    seven_days_ago = today - timedelta(days=7)
+    three_days_ago = now - timedelta(days=3)
 
-    result = await db.execute(
-        select(Job)
-        .where(Job.user_id == current_user.id)
-        .where(Job.is_deleted.is_(False))
-        .where(Job.followup_date.isnot(None))
-        .where(Job.followup_date <= cutoff)
-        .where(Job.status.in_(["Applied", "Interview"]))
-        .order_by(Job.followup_date.asc())
+    base = lambda: select(Job).where(
+        Job.user_id == current_user.id,
+        Job.is_deleted.is_(False),
     )
-    jobs = result.scalars().all()
+
+    # Explicit followup dates (user set a date, now due)
+    explicit_result = await db.execute(
+        base()
+        .where(Job.followup_date.isnot(None))
+        .where(Job.followup_date <= today)
+        .where(Job.status.notin_(["Closed", "Offer"]))
+    )
+    explicit_jobs = explicit_result.scalars().all()
+
+    # Auto-derived: Applied > 7 days ago, no response
+    auto_applied_result = await db.execute(
+        base()
+        .where(Job.status == "Applied")
+        .where(Job.applied_date <= seven_days_ago)
+        .where(Job.applied_date.isnot(None))
+        .where(Job.followup_date.is_(None))
+    )
+    auto_applied_jobs = auto_applied_result.scalars().all()
+
+    # Auto-derived: Interview > 3 days ago, no update
+    auto_interview_result = await db.execute(
+        base()
+        .where(Job.status == "Interview")
+        .where(Job.updated_at <= three_days_ago)
+        .where(Job.followup_date.is_(None))
+    )
+    auto_interview_jobs = auto_interview_result.scalars().all()
+
+    # Deduplicate (job could match multiple criteria)
+    seen: set = set()
+    unique: list[Job] = []
+    for job in explicit_jobs + auto_applied_jobs + auto_interview_jobs:
+        if job.id not in seen:
+            seen.add(job.id)
+            unique.append(job)
+
+    jobs = unique[:20]
 
     return [
         {
@@ -268,7 +302,15 @@ async def get_due_followups(
             "company_name": j.company_name,
             "followup_date": j.followup_date.isoformat() if j.followup_date else None,
             "status": j.status,
-            "days_until": (j.followup_date - now.date()).days if j.followup_date else None,
+            "days_until": (
+                (j.followup_date - today).days
+                if j.followup_date
+                else (
+                    (j.updated_at.date() - today).days
+                    if j.status == "Interview" and j.updated_at
+                    else (j.applied_date - today).days if j.applied_date else 0
+                )
+            ),
         }
         for j in jobs
     ]
@@ -598,7 +640,7 @@ async def global_search(
             )
         ).scalars().all()
         results["jobs"] = [
-            {"id": str(j.id), "company_name": j.company_name, "role_title": j.role_title, "status": j.status}
+            {"id": str(j.id), "title": j.role_title, "company_name": j.company_name, "type": "job", "status": j.status}
             for j in j_rows
         ]
 

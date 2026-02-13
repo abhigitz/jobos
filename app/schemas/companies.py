@@ -19,7 +19,7 @@ class CompanyCreate(BaseModel):
 class CompanyQuickCreate(BaseModel):
     """Minimal company creation from JD analysis flow."""
     name: str = Field(..., max_length=255)
-    lane: int = Field(2, ge=1, le=3)
+    lane: int = Field(2, ge=1, le=5)
     sector: Optional[str] = Field(None, max_length=100)
     website: Optional[str] = Field(None, max_length=500)
 
@@ -62,6 +62,8 @@ class CompanyOut(BaseModel):
             1: "Late-stage / Pre-IPO",
             2: "Growth-stage (Series C-D)",
             3: "MNC / Large Indian Corps",
+            4: "Early-stage (Series A-B)",
+            5: "Pre-seed / Seed",
         }
         if self.lane is not None:
             self.lane_label = LANE_LABELS.get(self.lane, f"Lane {self.lane}")

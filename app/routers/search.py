@@ -62,7 +62,7 @@ async def global_search(
 
     return {
         "jobs": [
-            {"id": str(j.id), "title": j.role_title, "company": j.company_name, "type": "job"}
+            {"id": str(j.id), "title": j.role_title, "company_name": j.company_name, "type": "job"}
             for j in jobs
         ],
         "companies": [

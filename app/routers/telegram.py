@@ -316,10 +316,15 @@ async def telegram_webhook(
 
 
 @router.post("/register-webhook")
-async def manual_register_webhook():
-    """Manually trigger webhook registration with Telegram API."""
+async def manual_register_webhook(
+    api_key: str = Header(..., alias="X-Admin-Key"),
+):
+    """Manually trigger webhook registration with Telegram API. Requires X-Admin-Key header."""
     from app.services.telegram_service import register_webhook
-    
+
+    if api_key != settings.admin_api_key:
+        raise HTTPException(status_code=401, detail="Invalid admin key")
+
     if not settings.telegram_bot_token:
         raise HTTPException(status_code=400, detail="TELEGRAM_BOT_TOKEN not configured")
     

@@ -30,7 +30,7 @@ from app.schemas.content_studio import (
 )
 from app.services.ai_service import generate_content_studio_topics, generate_linkedin_post
 
-router = APIRouter(prefix="/api/content-studio", tags=["content-studio"])
+router = APIRouter(prefix="/content-studio", tags=["content-studio"])
 logger = logging.getLogger(__name__)
 
 STORY_PROMPTS = [

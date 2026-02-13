@@ -15,9 +15,11 @@ if settings.sentry_dsn:
         environment=settings.environment or "production",
     )
 
+from fastapi import APIRouter
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
+from starlette.responses import RedirectResponse
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -40,7 +42,7 @@ async def lifespan(app: FastAPI):
         if "does not exist" in str(e) or "resume_files" in str(e):
             logger.warning("resume_files table not found. Run: alembic upgrade head")
     if settings.telegram_bot_token and settings.app_url:
-        webhook_url = f"{settings.app_url}/api/telegram/webhook"
+        webhook_url = f"{settings.app_url}/api/v1/telegram/webhook"
         await register_webhook(webhook_url, settings.telegram_webhook_secret)
         logger.info(f"Telegram webhook registered: {webhook_url}")
 
@@ -101,6 +103,27 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
+@app.middleware("http")
+async def redirect_old_api_paths(request: Request, call_next):
+    path = request.url.path
+    # Redirect /api/health to /health (health is at root level)
+    if path == "/api/health":
+        if request.method == "GET":
+            return RedirectResponse(url="/health", status_code=307)
+        request.scope["path"] = "/health"
+        return await call_next(request)
+    # Redirect /api/xxx to /api/v1/xxx (except /api/v1 paths)
+    if path.startswith("/api/") and not path.startswith("/api/v1/"):
+        new_path = path.replace("/api/", "/api/v1/", 1)
+        if request.method == "GET":
+            return RedirectResponse(url=new_path, status_code=307)
+        else:
+            # For POST/PATCH/DELETE, rewrite internally (no redirect)
+            request.scope["path"] = new_path
+    return await call_next(request)
+
+
 from .routers import (  # noqa: E402
     activity,
     admin,
@@ -122,24 +145,31 @@ from .routers import (  # noqa: E402
     telegram,
 )
 
-app.include_router(activity.router, prefix="/api/activity", tags=["activity"])
-app.include_router(admin.router, prefix="/api/admin", tags=["admin"])
-app.include_router(auth.router, prefix="/api/auth", tags=["auth"])
-app.include_router(profile.router, prefix="/api/profile", tags=["profile"])
-app.include_router(resume.router, prefix="/api/resume", tags=["resume"])
-app.include_router(jobs.router, prefix="/api/jobs", tags=["jobs"])
-app.include_router(companies.router, prefix="/api/companies", tags=["companies"])
-app.include_router(contacts.router, prefix="/api/contacts", tags=["contacts"])
-app.include_router(content.router, prefix="/api/content", tags=["content"])
-app.include_router(content_studio.router)
-app.include_router(analytics.router, prefix="/api/analytics", tags=["analytics"])
-app.include_router(briefing.router, prefix="/api/briefing", tags=["briefing"])
-app.include_router(briefings_user.router, prefix="/api/briefings", tags=["briefings"])
-app.include_router(daily_logs.router, prefix="/api/daily-logs", tags=["daily-logs"])
-app.include_router(telegram.router, prefix="/api/telegram", tags=["telegram"])
-app.include_router(interviews.router, prefix="/api/interviews", tags=["interviews"])
-app.include_router(scout.router, prefix="/api/scout", tags=["scout"])
-app.include_router(search.router)
+# Create v1 API router
+api_v1 = APIRouter(prefix="/api/v1")
+
+# Add all routers to v1
+api_v1.include_router(activity.router, prefix="/activity", tags=["activity"])
+api_v1.include_router(admin.router, prefix="/admin", tags=["admin"])
+api_v1.include_router(auth.router, prefix="/auth", tags=["auth"])
+api_v1.include_router(profile.router, prefix="/profile", tags=["profile"])
+api_v1.include_router(jobs.router, prefix="/jobs", tags=["jobs"])
+api_v1.include_router(companies.router, prefix="/companies", tags=["companies"])
+api_v1.include_router(contacts.router, prefix="/contacts", tags=["contacts"])
+api_v1.include_router(content.router, prefix="/content", tags=["content"])
+api_v1.include_router(analytics.router, prefix="/analytics", tags=["analytics"])
+api_v1.include_router(telegram.router, prefix="/telegram", tags=["telegram"])
+api_v1.include_router(briefing.router, prefix="/briefing", tags=["briefing"])
+api_v1.include_router(resume.router, prefix="/resume", tags=["resume"])
+api_v1.include_router(briefings_user.router, prefix="/briefings", tags=["briefings"])
+api_v1.include_router(content_studio.router)
+api_v1.include_router(daily_logs.router, prefix="/daily-logs", tags=["daily-logs"])
+api_v1.include_router(interviews.router, prefix="/interviews", tags=["interviews"])
+api_v1.include_router(scout.router, prefix="/scout", tags=["scout"])
+api_v1.include_router(search.router)
+
+# Mount v1 router
+app.include_router(api_v1)
 
 
 @app.exception_handler(Exception)
@@ -164,7 +194,7 @@ async def debug_unhandled_exception(request, exc):
     return JSONResponse(status_code=500, content={"detail": "Internal server error"})
 
 
-@app.get("/api/health")
+@app.get("/health")
 async def health_check(db=Depends(get_db)):
     """Deep health check with database connectivity."""
     from sqlalchemy import text

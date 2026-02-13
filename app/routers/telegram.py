@@ -331,7 +331,7 @@ async def manual_register_webhook(
     if not settings.app_url:
         raise HTTPException(status_code=400, detail="APP_URL not configured")
     
-    webhook_url = f"{settings.app_url}/api/telegram/webhook"
+    webhook_url = f"{settings.app_url}/api/v1/telegram/webhook"
     success = await register_webhook(webhook_url, settings.telegram_webhook_secret)
     
     if success:

@@ -9,7 +9,7 @@ from app.models.job import Job
 from app.models.company import Company
 from app.models.contact import Contact
 
-router = APIRouter(prefix="/api/search", tags=["search"])
+router = APIRouter(prefix="/search", tags=["search"])
 
 
 @router.get("")

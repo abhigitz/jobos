@@ -1,7 +1,9 @@
 import logging
+import time
+import uuid
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, HTTPException
+from fastapi import Depends, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
@@ -50,8 +52,8 @@ class DebugResumeMiddleware(BaseHTTPMiddleware):
                 _p = Path(__file__).resolve().parent.parent / ".cursor" / "debug.log"
                 with open(_p, "a") as f:
                     f.write(json.dumps({"id":"resume_req","timestamp":time.time()*1000,"method":request.method,"path":path}) + "\n")
-            except Exception:
-                pass
+            except Exception as e:
+                logger.warning(f"Debug middleware failed to write log: {e}")
         return await call_next(request)
 
 
@@ -69,6 +71,7 @@ from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from app.dependencies import limiter
 from app.config import get_settings
+from app.database import get_db
 
 app = FastAPI(title="JobOS API", version="0.2.0", lifespan=lifespan, redirect_slashes=False)
 
@@ -77,6 +80,22 @@ app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 app.add_middleware(TrailingSlashMiddleware)
 app.add_middleware(DebugResumeMiddleware)
+
+
+@app.middleware("http")
+async def log_requests(request: Request, call_next):
+    request_id = str(uuid.uuid4())[:8]
+    start_time = time.time()
+
+    logger.info("[%s] %s %s", request_id, request.method, request.url.path)
+
+    response = await call_next(request)
+
+    duration = time.time() - start_time
+    logger.info("[%s] %d (%.2fs)", request_id, response.status_code, duration)
+
+    response.headers["X-Request-ID"] = request_id
+    return response
 
 _settings = get_settings()
 app.add_middleware(
@@ -152,6 +171,18 @@ async def debug_unhandled_exception(request, exc):
 
 
 @app.get("/api/health")
-async def health_check() -> dict:
-    return {"status": "ok"}
+async def health_check(db=Depends(get_db)):
+    """Deep health check with database connectivity."""
+    from sqlalchemy import text
+
+    health: dict = {"status": "ok", "checks": {}}
+
+    try:
+        await db.execute(text("SELECT 1"))
+        health["checks"]["database"] = "ok"
+    except Exception as e:
+        health["checks"]["database"] = f"error: {e}"
+        health["status"] = "degraded"
+
+    return health
 

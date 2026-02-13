@@ -461,7 +461,7 @@ async def interview_prep_briefing(
                 await db.execute(
                     select(Job).where(
                         Job.user_id == user.id,
-                        Job.status == "Interview_Scheduled",
+                        Job.status == "Interview",
                         Job.interview_date.is_not(None),
                         Job.interview_date >= now,
                         Job.interview_date <= window_end,
@@ -566,4 +566,3 @@ async def market_intel_briefing(
 
             logging.getLogger(__name__).error("market intel briefing failed for user %s: %s", user.id, e)
     return {"success": True}
-    return {"status": "ok"}

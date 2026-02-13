@@ -194,7 +194,7 @@ async def get_sources(
     if not rows:
         return {"sources": [], "note": "Log your application sources to see which portals work best."}
 
-    response_statuses = {"Screening", "Interview Scheduled", "Interview Done", "Offer"}
+    response_statuses = {"Applied", "Interview", "Offer"}
     sources = []
     for portal, total in rows:
         response_count = (
@@ -311,7 +311,7 @@ async def get_resume_performance(
         )
     ).all()
 
-    response_statuses = {"Screening", "Interview Scheduled", "Interview Done", "Offer"}
+    response_statuses = {"Applied", "Interview", "Offer"}
     versions = []
     for version, total in rows:
         response_count = (
@@ -364,7 +364,7 @@ async def dashboard(db: AsyncSession = Depends(get_db), current_user=Depends(get
     pipeline_breakdown = {s: c for s, c in status_rows}
 
     total_applied = sum(c for s, c in status_rows if s not in ("Analyzed",))
-    total_interviews = sum(c for s, c in status_rows if s in ("Interview Scheduled", "Interview Done", "Offer"))
+    total_interviews = sum(c for s, c in status_rows if s in ("Interview", "Offer"))
 
     # --- This week ---
     week_start = today - timedelta(days=today.weekday())

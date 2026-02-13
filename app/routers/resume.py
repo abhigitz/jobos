@@ -31,8 +31,8 @@ def _dbg(msg: str, data: dict, hypothesis_id: str) -> None:
         import json, time
         with open(_DBG, "a") as f:
             f.write(json.dumps({"id": msg, "timestamp": time.time() * 1000, "location": "resume.py", "message": msg, "data": data, "hypothesisId": hypothesis_id}) + "\n")
-    except Exception:
-        pass
+    except Exception as e:
+        logger.debug(f"Resume debug helper failed: {e}")
     logger.info("[DEBUG] %s hypothesis=%s data=%s", msg, hypothesis_id, data)
 
 

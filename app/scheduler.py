@@ -11,6 +11,7 @@ scheduler = AsyncIOScheduler()
 
 def register_jobs() -> None:
     """Register all scheduled jobs. Called once at startup."""
+    from app.tasks.db_backup import run_backup
     from app.tasks.evening_checkin import evening_checkin_task
     from app.tasks.midday_check import midday_check_task
     from app.tasks.morning_briefing import morning_briefing_task
@@ -84,10 +85,19 @@ def register_jobs() -> None:
         misfire_grace_time=300,
     )
 
+    # 2:00 AM UTC = 7:30 AM IST, daily (Database Backup)
+    scheduler.add_job(
+        run_backup,
+        CronTrigger(hour=2, minute=0),
+        id="daily_backup",
+        replace_existing=True,
+        misfire_grace_time=300,
+    )
+
     logger.info(
         "Scheduler jobs registered: "
-        "job_scout (02:30 UTC), auto_ghost (02:55 UTC), morning (03:00 UTC), "
-        "midday (08:30 UTC), evening (13:00 UTC), linkedin (13:30 UTC), "
+        "job_scout (02:30 UTC), daily_backup (02:00 UTC), auto_ghost (02:55 UTC), "
+        "morning (03:00 UTC), midday (08:30 UTC), evening (13:00 UTC), linkedin (13:30 UTC), "
         "weekly (Sun 03:30 UTC)"
     )
 
@@ -99,5 +109,6 @@ def start_scheduler() -> None:
 
 
 def stop_scheduler() -> None:
-    scheduler.shutdown(wait=False)
+    if scheduler.running:
+        scheduler.shutdown(wait=True)  # Wait for running jobs to finish
     logger.info("Scheduler stopped")

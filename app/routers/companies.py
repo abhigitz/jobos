@@ -1,5 +1,6 @@
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Request
 from sqlalchemy import func, select
+from sqlalchemy.exc import ProgrammingError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
@@ -71,7 +72,9 @@ async def search_companies(
             .limit(5)
         )
         companies = result.scalars().all()
-    except Exception:
+    except ProgrammingError as e:
+        if "function similarity does not exist" not in str(e):
+            raise
         # Fallback to ILIKE if pg_trgm not available
         result = await db.execute(
             select(Company)

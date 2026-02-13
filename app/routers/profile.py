@@ -1,3 +1,5 @@
+import logging
+
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -12,6 +14,7 @@ from app.utils.json_parser import parse_json_response
 
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 
 @router.get("", response_model=ProfileOut)
@@ -119,10 +122,9 @@ RESUME TEXT:
             raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="AI extraction failed")
     except HTTPException:
         raise
-    except Exception:
-        data = await extract_profile(payload.resume_text)
-        if data is None:
-            raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="AI extraction failed")
+    except Exception as e:
+        logger.error(f"Profile extraction failed: {e}", exc_info=True)
+        raise HTTPException(status_code=502, detail="Failed to extract profile from resume")
 
     result = await db.execute(select(ProfileDNA).where(ProfileDNA.user_id == current_user.id))
     profile = result.scalar_one_or_none()

@@ -38,7 +38,7 @@ async def get_morning_briefing(
             select(Job).where(
                 Job.user_id == current_user.id,
                 Job.is_deleted.is_(False),
-                Job.status.in_(["Applied", "Screening", "Interview Scheduled"]),
+                Job.status.in_(["Applied", "Interview"]),
             )
         )
     ).scalars().all()

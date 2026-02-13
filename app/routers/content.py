@@ -1,4 +1,5 @@
 import json
+import logging
 from datetime import date, datetime, timedelta
 from typing import Optional
 
@@ -17,6 +18,7 @@ from app.services.activity_log import log_activity
 
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 VALID_STATUSES = {"Planned", "Drafted", "Reviewed", "Published"}
 
@@ -184,8 +186,9 @@ Return ONLY valid JSON array:
     try:
         result = await call_claude(prompt, max_tokens=1000)
         data = parse_json_response(result)
-    except Exception:
-        raise HTTPException(status_code=503, detail="AI generation failed")
+    except Exception as e:
+        logger.error(f"Content generation failed: {e}", exc_info=True)
+        raise HTTPException(503, f"Content generation temporarily unavailable: {type(e).__name__}")
 
     if data is None:
         raise HTTPException(status_code=503, detail="AI generation returned invalid data")
@@ -216,46 +219,6 @@ Return ONLY valid JSON array:
     await db.commit()
 
     return {"generated": len(created_dates), "dates": created_dates}
-
-
-@router.post("/initialize")
-async def initialize_content_calendar(
-    db: AsyncSession = Depends(get_db),
-    current_user=Depends(get_current_user),
-):
-    """Generate starter content topics for new users."""
-    existing = await db.execute(
-        select(ContentCalendar).where(ContentCalendar.user_id == current_user.id).limit(1)
-    )
-    if existing.scalar_one_or_none():
-        raise HTTPException(status_code=400, detail="Content calendar already initialized")
-
-    prof_res = await db.execute(
-        select(ProfileDNA).where(ProfileDNA.user_id == current_user.id)
-    )
-    profile = prof_res.scalar_one_or_none()
-
-    default_topics = [
-        {"topic": "Career transition lessons learned", "category": "Personal"},
-        {"topic": "Industry trend I'm excited about", "category": "Industry"},
-        {"topic": "Skill I'm currently developing", "category": "Growth"},
-        {"topic": "Professional win worth sharing", "category": "Personal"},
-        {"topic": "Advice for others in similar roles", "category": "Strategy"},
-    ]
-
-    base_date = date.today()
-    for i, item in enumerate(default_topics):
-        content = ContentCalendar(
-            user_id=current_user.id,
-            topic=item["topic"],
-            category=item["category"],
-            scheduled_date=base_date + timedelta(days=i * 2),
-            status="Planned",
-        )
-        db.add(content)
-
-    await db.commit()
-    return {"message": "Content calendar initialized with 5 starter topics", "count": 5}
 
 
 @router.post("/initialize")
@@ -421,5 +384,6 @@ async def generate_draft(
     )
     db.add(item)
     await db.commit()
+    await db.refresh(item)
 
     return {"id": str(item.id), "draft_text": draft}

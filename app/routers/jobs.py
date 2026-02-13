@@ -151,62 +151,23 @@ async def create_job(
 async def get_pipeline(
     db: AsyncSession = Depends(get_db),
     current_user=Depends(get_current_user),
+    limit_per_status: int = 50,
 ):
-    """Get comprehensive pipeline view with aggregations and actionable lists."""
-    today = datetime.now(timezone.utc).date()
-
-    all_jobs = (
-        await db.execute(
+    """Get pipeline view with jobs grouped by status. Paginated per status."""
+    pipeline: dict[str, list] = {}
+    for status in ["Tracking", "Applied", "Interview", "Offer", "Closed"]:
+        result = await db.execute(
             select(Job)
-            .where(Job.user_id == current_user.id, Job.is_deleted.is_(False))
+            .where(Job.user_id == current_user.id)
+            .where(Job.status == status)
+            .where(Job.is_deleted.is_(False))
             .order_by(Job.updated_at.desc())
+            .limit(limit_per_status)
         )
-    ).scalars().all()
+        jobs = result.scalars().all()
+        pipeline[status] = [JobOut.model_validate(j) for j in jobs]
 
-    pipeline = {}
-    for job in all_jobs:
-        pipeline[job.status] = pipeline.get(job.status, 0) + 1
-
-    inactive_statuses = {"Closed"}
-    active_count = sum(count for status, count in pipeline.items() if status not in inactive_statuses)
-
-    recent = []
-    for job in all_jobs[:5]:
-        if job.updated_at:
-            days_since = (today - job.updated_at.date()).days
-        else:
-            days_since = 0
-        recent.append({
-            "id": str(job.id),
-            "company": job.company_name,
-            "role": job.role_title,
-            "status": job.status,
-            "applied_date": job.applied_date.isoformat() if job.applied_date else None,
-            "days_since_update": days_since,
-        })
-
-    stale = []
-    stale_threshold = today - timedelta(days=14)
-    for job in all_jobs:
-        if job.status in ("Applied", "Tracking") and job.updated_at and job.updated_at.date() <= stale_threshold:
-            days_since = (today - job.updated_at.date()).days
-            stale.append({
-                "id": str(job.id),
-                "company": job.company_name,
-                "role": job.role_title,
-                "status": job.status,
-                "applied_date": job.applied_date.isoformat() if job.applied_date else None,
-                "days_since_update": days_since,
-                "suggested_action": "Follow up or check for referral connection",
-            })
-
-    return {
-        "pipeline": pipeline,
-        "total": len(all_jobs),
-        "active": active_count,
-        "recent": recent,
-        "stale": stale,
-    }
+    return pipeline
 
 
 @router.get("/stale")
@@ -388,8 +349,13 @@ async def analyze_jd_endpoint(
 
     if payload.jd_url and len(jd_text) < 50:
         try:
-            jd_text = await extract_jd_from_url(payload.jd_url)
+            result = await extract_jd_from_url(payload.jd_url)
+            if isinstance(result, dict) and not result.get("extracted", True):
+                raise HTTPException(status_code=400, detail=result.get("error", "Could not extract JD from URL"))
+            jd_text = result
             extracted_from_url = True
+        except HTTPException:
+            raise
         except ValueError as e:
             raise HTTPException(status_code=400, detail=str(e))
 
@@ -515,43 +481,48 @@ async def save_from_analysis(
         )
         db.add(job)
 
-    # --- Auto-create company if not exists ---
-    if company_name and company_name.strip():
-        existing_company = await db.execute(
-            select(Company).where(
-                func.lower(Company.name) == func.lower(company_name.strip()),
-                Company.user_id == current_user.id,
+    try:
+        # --- Auto-create company if not exists ---
+        if company_name and company_name.strip():
+            existing_company = await db.execute(
+                select(Company).where(
+                    func.lower(Company.name) == func.lower(company_name.strip()),
+                    Company.user_id == current_user.id,
+                )
             )
-        )
-        company = existing_company.scalar_one_or_none()
-        if not company:
-            company = Company(
-                user_id=current_user.id,
-                name=company_name.strip(),
-            )
-            db.add(company)
-            await db.flush()
-        job.company_id = company.id
-    # --- End auto-create ---
+            company = existing_company.scalar_one_or_none()
+            if not company:
+                company = Company(
+                    user_id=current_user.id,
+                    name=company_name.strip(),
+                )
+                db.add(company)
+                await db.flush()
+            job.company_id = company.id
+        # --- End auto-create ---
 
-    # Add system notes for timeline
-    notes = job.notes if job.notes else []
-    notes.append({
-        "text": f"Analyzed. ATS: {payload.ats_score}, Fit: {payload.fit_score}",
-        "created_at": datetime.now(timezone.utc).isoformat(),
-        "type": "system",
-    })
-    if payload.status == "Applied":
-        notes.append({
-            "text": f"Applied via {payload.application_channel or 'unknown'}",
+        # Add system notes for timeline
+        current_notes = job.notes if job.notes is not None else []
+        current_notes.append({
+            "text": f"Analyzed. ATS: {payload.ats_score}, Fit: {payload.fit_score}",
             "created_at": datetime.now(timezone.utc).isoformat(),
-            "type": "status_change",
+            "type": "system",
         })
-    job.notes = notes
-    flag_modified(job, "notes")
+        if payload.status == "Applied":
+            current_notes.append({
+                "text": f"Applied via {payload.application_channel or 'unknown'}",
+                "created_at": datetime.now(timezone.utc).isoformat(),
+                "type": "status_change",
+            })
+        job.notes = current_notes
+        flag_modified(job, "notes")
 
-    await db.commit()
-    await db.refresh(job)
+        await db.commit()
+        await db.refresh(job)
+    except Exception as e:
+        await db.rollback()
+        logger.error(f"Failed to create company and link job: {e}")
+        raise HTTPException(500, "Failed to save job with company")
 
     await log_activity(
         db, current_user.id, "job_analyzed",
@@ -598,8 +569,8 @@ async def deep_resume_analysis_endpoint(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Deep resume analysis failed: {e}")
-        raise HTTPException(status_code=500, detail=f"Analysis failed: {str(e)[:200]}")
+        logger.error(f"Deep resume analysis failed: {e}", exc_info=True)
+        raise HTTPException(status_code=503, detail="Resume analysis temporarily unavailable")
 
     if analysis is None:
         raise HTTPException(status_code=502, detail="AI response could not be parsed. Try again.")
@@ -719,19 +690,19 @@ async def update_job(
     # Auto-note on status change for timeline
     new_status = update_data.get("status")
     if new_status and new_status != old_status:
-        existing_notes = job.notes if job.notes is not None else []
+        current_notes = job.notes if job.notes is not None else []
         note_text = f"Status changed: {old_status} to {new_status}"
         if new_status == "Applied" and update_data.get("application_channel"):
             note_text = f"Applied via {update_data['application_channel']}"
         elif new_status == "Closed":
             reason = update_data.get("closed_reason") or job.closed_reason or "Dropped"
             note_text = f"Closed: {reason}"
-        existing_notes.append({
+        current_notes.append({
             "text": note_text,
             "created_at": datetime.now(timezone.utc).isoformat(),
             "type": "status_change",
         })
-        job.notes = existing_notes
+        job.notes = current_notes
         flag_modified(job, "notes")
 
     await db.commit()
@@ -773,12 +744,12 @@ async def log_followup(
     job.last_followup_date = date.today()
     job.followup_count = (job.followup_count or 0) + 1
     if payload.notes:
-        existing = job.notes if job.notes is not None else []
-        existing.append({
+        current_notes = job.notes if job.notes is not None else []
+        current_notes.append({
             "text": f"[Follow-up {date.today()}] {payload.notes}",
             "created_at": datetime.now(timezone.utc).isoformat()
         })
-        job.notes = existing
+        job.notes = current_notes
         flag_modified(job, "notes")
 
     await db.commit()
@@ -812,12 +783,12 @@ async def add_note(
     if job is None or job.user_id != current_user.id or job.is_deleted:
         raise HTTPException(status_code=404, detail="Job not found")
 
-    existing = job.notes if job.notes is not None else []
-    existing.append({
+    current_notes = job.notes if job.notes is not None else []
+    current_notes.append({
         "text": payload.text,
         "created_at": datetime.now(timezone.utc).isoformat(),
     })
-    job.notes = existing
+    job.notes = current_notes
     flag_modified(job, "notes")
     await db.commit()
     await db.refresh(job)
@@ -1088,17 +1059,12 @@ Keep total under 1500 words. Be specific, not generic."""
 
     try:
         prep_content = await call_claude(prompt, max_tokens=3000)
-    except Exception:
-        return {
-            "error": "AI service temporarily unavailable",
-            "fallback": f"Company: {job.company_name}. Review your notes and the JD analysis.",
-        }
+    except Exception as e:
+        logger.error(f"Interview prep failed: {e}", exc_info=True)
+        raise HTTPException(503, "Interview prep temporarily unavailable")
 
     if prep_content is None:
-        return {
-            "error": "AI service temporarily unavailable",
-            "fallback": f"Company: {job.company_name}. Review your notes and the JD analysis.",
-        }
+        raise HTTPException(503, "Interview prep temporarily unavailable")
 
     # Cache the result
     if interview:

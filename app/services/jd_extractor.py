@@ -1,14 +1,17 @@
 """Service to extract job description text from URLs."""
 import json
+import logging
 import re
-from urllib.parse import urlparse
 from typing import Optional
+from urllib.parse import urlparse
 
 import httpx
 from bs4 import BeautifulSoup
 
+logger = logging.getLogger(__name__)
 
-async def extract_jd_from_url(url: str) -> str:
+
+async def extract_jd_from_url(url: str) -> str | dict:
     headers = {
         "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
         "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
@@ -23,8 +26,9 @@ async def extract_jd_from_url(url: str) -> str:
         raise ValueError("Request timed out. Please paste the JD text manually.")
     except httpx.HTTPStatusError as e:
         raise ValueError(f"Could not fetch URL (HTTP {e.response.status_code}). Please paste the JD text manually.")
-    except Exception:
-        raise ValueError("Could not fetch URL. Please paste the JD text manually.")
+    except Exception as e:
+        logger.warning(f"JD extraction failed for URL: {e}")
+        return {"error": str(e), "extracted": False}
 
     soup = BeautifulSoup(resp.text, "html.parser")
 

@@ -1,5 +1,7 @@
+import asyncio
 import json
 import logging
+from functools import wraps
 from typing import Any
 
 import anthropic
@@ -12,6 +14,32 @@ from app.utils.json_parser import parse_json_response
 logger = logging.getLogger(__name__)
 
 client = AsyncAnthropic()
+
+
+def retry_on_failure(max_retries: int = 3, backoff_base: int = 2):
+    """Retry decorator for Claude API calls with exponential backoff."""
+
+    def decorator(func):
+        @wraps(func)
+        async def wrapper(*args, **kwargs):
+            last_error = None
+            for attempt in range(max_retries):
+                try:
+                    return await func(*args, **kwargs)
+                except Exception as e:
+                    last_error = e
+                    if attempt < max_retries - 1:
+                        wait_time = backoff_base**attempt
+                        logger.warning(
+                            f"Claude API attempt {attempt + 1} failed: {e}. Retrying in {wait_time}s"
+                        )
+                        await asyncio.sleep(wait_time)
+            logger.error(f"Claude API failed after {max_retries} attempts: {last_error}")
+            raise last_error
+
+        return wrapper
+
+    return decorator
 
 
 def _get_model(task_type: str = "default") -> str:
@@ -53,6 +81,7 @@ async def call_claude(prompt: str, max_tokens: int = 2000, task_type: str = "def
         return None
 
 
+@retry_on_failure(max_retries=3)
 async def analyze_jd(jd_text: str, profile: dict[str, Any]) -> dict | None:
     level = profile.get("experience_level", "Mid")
     level_hint = LEVEL_CONTEXT.get(level, LEVEL_CONTEXT["Mid"])
@@ -108,6 +137,7 @@ RULES:
     return parsed
 
 
+@retry_on_failure(max_retries=3)
 async def deep_resume_analysis(jd_text: str, resume_text: str, profile: dict[str, Any]) -> dict | None:
     """Deep resume vs JD analysis with specific rewrite suggestions."""
     level = profile.get("experience_level", "Mid")
@@ -160,6 +190,7 @@ RULES:
     return parse_json_response(result)
 
 
+@retry_on_failure(max_retries=3)
 async def extract_profile(resume_text: str) -> dict | None:
     prompt = f"""Extract a structured professional profile from this resume/text.
 
@@ -187,6 +218,7 @@ Return ONLY valid JSON:
     return parse_json_response(result)
 
 
+@retry_on_failure(max_retries=3)
 async def generate_content_draft(topic: str, category: str, profile: dict[str, Any]) -> str | None:
     prompt = f"""Write a 150-200 word LinkedIn post about this topic.
 
@@ -203,6 +235,7 @@ Return ONLY the post text, nothing else."""
     return await call_claude(prompt, max_tokens=500, task_type="content")
 
 
+@retry_on_failure(max_retries=3)
 async def generate_single_post(topic: str, content_type: str, profile: Any) -> str | None:
     """Generate a single LinkedIn post for shuffle/regeneration."""
     prompt = f"""Write a LinkedIn post about: {topic}
@@ -222,6 +255,7 @@ Return ONLY the post text, no preamble."""
     return await call_claude(prompt, max_tokens=500, task_type="content")
 
 
+@retry_on_failure(max_retries=3)
 async def generate_company_deep_dive(company_name: str, sector: str | None, profile: dict[str, Any]) -> str | None:
     prompt = f"""Research and create a briefing on {company_name} ({sector}) for a job candidate.
 
@@ -241,6 +275,7 @@ Return as structured text with clear headers."""
     return await call_claude(prompt, max_tokens=3000)
 
 
+@retry_on_failure(max_retries=3)
 async def research_company_structured(
     company_name: str, sector: str | None, profile: dict[str, Any]
 ) -> dict | None:
@@ -283,6 +318,7 @@ RULES:
     return parsed
 
 
+@retry_on_failure(max_retries=3)
 async def generate_morning_briefing(data: dict[str, Any]) -> str | None:
     prompt = f"""Generate a morning briefing for a job seeker based on this data:
 
@@ -305,6 +341,7 @@ Keep it concise. Use bullet points. Under 800 words."""
     return await call_claude(prompt, max_tokens=1500, task_type="content")
 
 
+@retry_on_failure(max_retries=3)
 async def analyze_jd_patterns(jd_texts: list[str], resume_keywords: list[str]) -> dict | None:
     prompt = f"""Analyze these {len(jd_texts)} job descriptions that scored 7+ fit.
 
@@ -334,6 +371,7 @@ Rank keywords by frequency. Include ALL keywords appearing in 3+ JDs."""
     return parse_json_response(result)
 
 
+@retry_on_failure(max_retries=3)
 async def generate_interview_prep(
     company_name: str,
     role_title: str,
@@ -387,6 +425,7 @@ Be specific. Use real numbers. No generic filler."""
     return await call_claude(prompt, max_tokens=4000)
 
 
+@retry_on_failure(max_retries=3)
 async def generate_market_intel(company_names: list[str]) -> str | None:
     prompt = f"""You are a market intelligence analyst for a job seeker targeting 
 B2C consumer tech companies in Bangalore, India.
@@ -409,6 +448,7 @@ Mark each company as 🟢 (actively hiring), 🟡 (stable), or 🔴 (freezing/la
     return await call_claude(prompt, max_tokens=4000, task_type="content")
 
 
+@retry_on_failure(max_retries=3)
 async def generate_content_topics(profile: dict[str, Any]) -> list[dict[str, str]] | None:
     prompt = f"""Generate 7 LinkedIn post topics for this profile.
 
@@ -429,6 +469,7 @@ Return ONLY valid JSON:
     return data.get("topics")
 
 
+@retry_on_failure(max_retries=3)
 async def generate_midday_check(data: dict[str, Any]) -> str | None:
     prompt = f"""Generate a mid-day accountability check for a job seeker.
 
@@ -442,6 +483,7 @@ Keep it under 200 words."""
     return await call_claude(prompt, max_tokens=400, task_type="content")
 
 
+@retry_on_failure(max_retries=3)
 async def generate_weekly_review(data: dict[str, Any]) -> str | None:
     prompt = f"""Generate a weekly review for a job seeker.
 

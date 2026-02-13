@@ -141,14 +141,11 @@ async def redirect_old_api_paths(request: Request, call_next):
             return RedirectResponse(url="/health", status_code=307)
         request.scope["path"] = "/health"
         return await call_next(request)
-    # Redirect /api/xxx to /api/v1/xxx (except /api/v1 paths)
+    # Rewrite /api/xxx to /api/v1/xxx (except /api/v1 paths)
+    # Use path rewrite for ALL methods - 307 redirects break CORS for cross-origin fetch
     if path.startswith("/api/") and not path.startswith("/api/v1/"):
         new_path = path.replace("/api/", "/api/v1/", 1)
-        if request.method == "GET":
-            return RedirectResponse(url=new_path, status_code=307)
-        else:
-            # For POST/PATCH/DELETE, rewrite internally (no redirect)
-            request.scope["path"] = new_path
+        request.scope["path"] = new_path
     return await call_next(request)
 
 

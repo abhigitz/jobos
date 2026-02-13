@@ -1,3 +1,4 @@
+import hashlib
 from datetime import datetime, timedelta, timezone
 from typing import Any, Optional
 
@@ -21,6 +22,11 @@ def hash_password(password: str) -> str:
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
     return pwd_context.verify(plain_password, hashed_password)
+
+
+def hash_token(token: str) -> str:
+    """Hash a token using SHA256 (for refresh tokens, not passwords)."""
+    return hashlib.sha256(token.encode()).hexdigest()
 
 
 def _get_secrets() -> tuple[str, str]:

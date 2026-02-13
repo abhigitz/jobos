@@ -9,6 +9,7 @@ from app.auth import (
     create_access_token,
     create_refresh_token,
     hash_password,
+    hash_token,
     verify_password,
 )
 from app.database import get_db
@@ -97,7 +98,7 @@ async def login(
 
     rt = RefreshToken(
         user_id=user.id,
-        token_hash=hash_password(refresh_token),
+        token_hash=hash_token(refresh_token),
         expires_at=datetime.now(timezone.utc) + timedelta(days=7),
     )
     db.add(rt)
@@ -132,7 +133,7 @@ async def refresh_token_endpoint(
     tokens = result_tokens.scalars().all()
     matched: RefreshToken | None = None
     for rt in tokens:
-        if verify_password(token, rt.token_hash):
+        if hash_token(token) == rt.token_hash:
             matched = rt
             break
 
@@ -146,7 +147,7 @@ async def refresh_token_endpoint(
 
     new_rt = RefreshToken(
         user_id=user.id,
-        token_hash=hash_password(new_refresh),
+        token_hash=hash_token(new_refresh),
         expires_at=datetime.now(timezone.utc) + timedelta(days=7),
     )
     db.add(new_rt)
@@ -190,7 +191,7 @@ async def verify_email(payload: VerifyEmailRequest, db: AsyncSession = Depends(g
 
     rt = RefreshToken(
         user_id=user.id,
-        token_hash=hash_password(refresh_token),
+        token_hash=hash_token(refresh_token),
         expires_at=datetime.now(timezone.utc) + timedelta(days=7),
     )
     db.add(rt)

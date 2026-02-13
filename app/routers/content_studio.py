@@ -150,7 +150,22 @@ async def generate_topics(
         await db.commit()
 
     profile = await get_user_profile(db, user.id)
-    topics_data = await generate_content_studio_topics(profile, categories)
+    settings = await get_or_create_settings(db, user.id)
+
+    recent_topics_result = await db.execute(
+        select(ContentTopic.topic_title)
+        .where(ContentTopic.user_id == user.id)
+        .order_by(ContentTopic.created_at.desc())
+        .limit(20)
+    )
+    recent_topic_titles = [r[0] for r in recent_topics_result.all()]
+
+    topics_data = await generate_content_studio_topics(
+        profile=profile,
+        categories=categories,
+        avoid_specific_numbers=settings.avoid_specific_numbers,
+        recent_topics=recent_topic_titles if recent_topic_titles else None,
+    )
     if not topics_data:
         return []
 
@@ -571,6 +586,29 @@ async def dismiss_prompt(
     )
     await db.commit()
     return {"status": "dismissed"}
+
+
+@router.post("/stories/undismiss-prompt")
+async def undismiss_prompt(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Un-dismiss today's prompt so it shows again."""
+    today = datetime.now(timezone.utc).date()
+
+    result = await db.execute(
+        select(StoryPromptShown)
+        .where(StoryPromptShown.user_id == current_user.id)
+        .where(func.date(StoryPromptShown.shown_at) == today)
+    )
+    prompt = result.scalar_one_or_none()
+
+    if prompt:
+        prompt.dismissed = False
+        await db.commit()
+        return {"status": "undismissed", "prompt_text": prompt.prompt_text}
+
+    return {"status": "no_prompt_today"}
 
 
 @router.post("/stories")

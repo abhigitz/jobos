@@ -523,11 +523,30 @@ Write the post now. Return ONLY the post text, nothing else."""
 
 @retry_on_failure(max_retries=3)
 async def generate_content_studio_topics(
-    profile: dict[str, Any], categories: list[str] | None = None
+    profile: dict[str, Any],
+    categories: list[str] | None = None,
+    avoid_specific_numbers: bool = True,
+    recent_topics: list[str] | None = None,
 ) -> list[dict[str, Any]] | None:
     """Generate Content Studio v2 topics with angle and suggested_creative."""
     cats = categories or ["Growth", "Career", "Leadership", "GenAI", "Industry", "Personal"]
     cats_str = "|".join(cats)
+
+    recent_context = ""
+    if recent_topics:
+        recent_context = (
+            "\n\nAVOID these recent topics (too similar):\n"
+            + "\n".join(f"- {t}" for t in recent_topics[:10])
+        )
+
+    number_guidance = ""
+    if avoid_specific_numbers:
+        number_guidance = """
+IMPORTANT - AVOID SPECIFIC NUMBERS IN TOPICS:
+- DON'T say: "$7M budget", "$200M ARR", "40-person team"
+- DO say: "large-scale budget", "significant growth", "leading a team"
+- Keep topics about LESSONS, not achievements
+"""
 
     prompt = f"""Generate 7 LinkedIn post topics for this profile.
 
@@ -535,6 +554,8 @@ PROFILE:
 {json.dumps(profile, indent=2, default=str)}
 
 CATEGORIES TO USE (pick from): {cats_str}
+{number_guidance}
+{recent_context}
 
 Return ONLY valid JSON:
 {{

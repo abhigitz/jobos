@@ -31,6 +31,7 @@ from app.services.scout_preferences import (
     update_learned_preferences,
 )
 from app.services.scout_service import run_scout
+from app.tasks.job_scout import run_job_scout
 
 logger = logging.getLogger(__name__)
 
@@ -433,3 +434,12 @@ async def dismiss_scout_result(
     await db.commit()
 
     return {"status": "dismissed"}
+
+
+@router.post("/run-now")
+async def run_now(
+    current_user=Depends(get_current_user),
+):
+    """Manually trigger the job scout task (SerpAPI fetch, upsert, matching)."""
+    result = await run_job_scout()
+    return {"status": "completed", "result": result}

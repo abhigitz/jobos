@@ -7,6 +7,7 @@ from datetime import datetime, timezone
 from typing import Any
 
 import httpx
+from bs4 import BeautifulSoup
 
 from app.services.serpapi_service import (
     extract_city,
@@ -30,13 +31,21 @@ def _company_name_from_slug(slug: str) -> str:
     return COMPANY_SLUG_TO_NAME.get(slug.lower(), slug.replace("-", " ").title())
 
 
+def _strip_html(html: str | None) -> str | None:
+    """Strip HTML tags from content; return None if empty."""
+    if not html or not html.strip():
+        return None
+    text = BeautifulSoup(html, "html.parser").get_text(separator=" ", strip=True)
+    return text if text else None
+
+
 async def fetch_greenhouse_jobs(company_slug: str) -> list[dict[str, Any]]:
     """
     Fetch jobs from Greenhouse job board.
-    URL: https://boards.greenhouse.io/{company_slug}/jobs.json
+    URL: https://boards-api.greenhouse.io/v1/boards/{company_slug}/jobs
     Returns normalized job dicts with: title, location, url, company_name, source="greenhouse"
     """
-    url = f"https://boards.greenhouse.io/{company_slug}/jobs.json"
+    url = f"https://boards-api.greenhouse.io/v1/boards/{company_slug}/jobs"
     jobs: list[dict[str, Any]] = []
 
     try:
@@ -74,6 +83,9 @@ async def fetch_greenhouse_jobs(company_slug: str) -> list[dict[str, Any]]:
             if not url_val:
                 continue
 
+            content = raw.get("content")
+            description = _strip_html(content) if content else None
+
             company_norm = normalize_company(company_name)
             city = extract_city(location) if location else None
             dedup_hash = generate_dedup_hash(company_name, title, location or "")
@@ -86,7 +98,7 @@ async def fetch_greenhouse_jobs(company_slug: str) -> list[dict[str, Any]]:
                 "company_name_normalized": company_norm,
                 "location": location,
                 "city": city,
-                "description": None,
+                "description": description,
                 "salary_min": None,
                 "salary_max": None,
                 "salary_is_estimated": False,

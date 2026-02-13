@@ -75,10 +75,31 @@ app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 # CORS must be first in execution order (add last - Starlette runs last-added first)
 # so CORS headers are added even on redirect responses (e.g. 307)
+# Build allow_origins: FRONTEND_URL from env, plus localhost, plus Lovable deployment
+_cors_origins = [
+    o for o in [
+        settings.frontend_url,
+        "http://localhost:3000",
+        "http://localhost:5173",
+        "https://jobos-1.lovable.app",
+    ]
+    if o
+]
+_cors_origins = list(dict.fromkeys(_cors_origins))  # dedupe preserving order
+# #region agent log
+import json as _json
+try:
+    with open("/Users/abhinavjain/JobOS/.cursor/debug.log", "a") as _f:
+        _f.write(_json.dumps({"id":"cors_startup","timestamp":int(__import__("time").time()*1000),"location":"main.py:cors_config","message":"CORS config at startup","data":{"allow_origins":_cors_origins,"frontend_url":settings.frontend_url,"is_list":isinstance(_cors_origins,list)},"hypothesisId":"H1"})+"\n")
+except Exception:
+    pass
+logger.info("CORS allow_origins=%s frontend_url=%s", _cors_origins, settings.frontend_url)
+# #endregion
 app.add_middleware(TrailingSlashMiddleware)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[settings.frontend_url, "http://localhost:3000", "http://localhost:5173"],
+    allow_origins=_cors_origins,
+    allow_origin_regex=r"https://.*\.lovable\.app",  # Lovable preview deployments
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

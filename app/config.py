@@ -22,6 +22,7 @@ class Settings(BaseSettings):
     owner_phone: str = ""
     owner_linkedin_url: str = ""
     serper_api_key: str = ""
+    serpapi_key: str = ""
     adzuna_app_id: str = ""
     adzuna_api_key: str = ""
     sentry_dsn: str | None = None

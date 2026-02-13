@@ -4,6 +4,7 @@ import logging
 from apscheduler.jobstores.redis import RedisJobStore
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
+from redis import Redis
 
 from app.config import get_settings
 
@@ -13,7 +14,8 @@ settings = get_settings()
 
 jobstores = {}
 if settings.redis_url:
-    jobstores["default"] = RedisJobStore(url=settings.redis_url)
+    redis_client = Redis.from_url(settings.redis_url)
+    jobstores["default"] = RedisJobStore(redis=redis_client)
 
 scheduler = AsyncIOScheduler(jobstores=jobstores)
 

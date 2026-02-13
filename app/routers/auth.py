@@ -1,7 +1,7 @@
 import secrets
 from datetime import datetime, timedelta, timezone
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -12,7 +12,7 @@ from app.auth import (
     verify_password,
 )
 from app.database import get_db
-from app.dependencies import get_current_user
+from app.dependencies import get_current_user, limiter
 from app.models.email_verification_token import EmailVerificationToken
 from app.models.password_reset_token import PasswordResetToken
 from app.models.profile import ProfileDNA
@@ -36,7 +36,12 @@ router = APIRouter()
 
 
 @router.post("/register", response_model=UserOut, status_code=status.HTTP_201_CREATED)
-async def register_user(payload: RegisterRequest, db: AsyncSession = Depends(get_db)) -> UserOut:
+@limiter.limit("3/hour")
+async def register_user(
+    request: Request,
+    payload: RegisterRequest,
+    db: AsyncSession = Depends(get_db),
+) -> UserOut:
     existing = await db.execute(select(User).where(User.email == payload.email))
     if existing.scalar_one_or_none() is not None:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Email already registered")
@@ -70,7 +75,12 @@ async def register_user(payload: RegisterRequest, db: AsyncSession = Depends(get
 
 
 @router.post("/login", response_model=TokenResponse)
-async def login(payload: LoginRequest, db: AsyncSession = Depends(get_db)) -> TokenResponse:
+@limiter.limit("5/minute")
+async def login(
+    request: Request,
+    payload: LoginRequest,
+    db: AsyncSession = Depends(get_db),
+) -> TokenResponse:
     result = await db.execute(select(User).where(User.email == payload.email))
     user = result.scalar_one_or_none()
     if user is None or not verify_password(payload.password, user.hashed_password):
@@ -226,8 +236,11 @@ async def resend_verification(
 
 
 @router.post("/forgot-password", response_model=MessageResponse)
+@limiter.limit("3/hour")
 async def forgot_password(
-    payload: ForgotPasswordRequest, db: AsyncSession = Depends(get_db)
+    request: Request,
+    payload: ForgotPasswordRequest,
+    db: AsyncSession = Depends(get_db),
 ) -> MessageResponse:
     generic = MessageResponse(message="If an account exists with that email, a password reset link has been sent.")
 
@@ -262,8 +275,11 @@ async def forgot_password(
 
 
 @router.post("/reset-password", response_model=MessageResponse)
+@limiter.limit("3/hour")
 async def reset_password(
-    payload: ResetPasswordRequest, db: AsyncSession = Depends(get_db)
+    request: Request,
+    payload: ResetPasswordRequest,
+    db: AsyncSession = Depends(get_db),
 ) -> MessageResponse:
     result = await db.execute(
         select(PasswordResetToken).where(PasswordResetToken.token == payload.token)

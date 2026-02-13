@@ -1,5 +1,6 @@
 """Email service using Resend for transactional emails."""
 
+import html
 import logging
 from urllib.parse import quote
 
@@ -33,7 +34,7 @@ async def send_verification_email(to_email: str, token: str, full_name: str) -> 
     <div style="font-family: Arial, sans-serif; max-width: 560px; margin: 0 auto; padding: 32px;">
         <h2 style="color: #111827; margin-bottom: 16px;">Verify your email</h2>
         <p style="color: #374151; font-size: 16px; line-height: 1.6;">
-            Hi {full_name},
+            Hi {html.escape(full_name or "")},
         </p>
         <p style="color: #374151; font-size: 16px; line-height: 1.6;">
             Thanks for signing up for <strong>JobOS</strong>. Please verify your email

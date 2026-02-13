@@ -7,7 +7,12 @@ from passlib.context import CryptContext
 from app.config import get_settings
 
 
-pwd_context = CryptContext(schemes=["pbkdf2_sha256"], deprecated="auto")
+# bcrypt with 12 rounds (OWASP recommended minimum); pbkdf2_sha256 for legacy hash verification
+pwd_context = CryptContext(
+    schemes=["bcrypt", "pbkdf2_sha256"],
+    deprecated="auto",
+    bcrypt__rounds=12,
+)
 
 
 def hash_password(password: str) -> str:
@@ -31,6 +36,7 @@ def _create_token(data: dict[str, Any], expires_delta: timedelta, secret: str) -
 
 
 def create_access_token(user_id: str) -> str:
+    """Create access token with 30 min expiry (security: short-lived to limit exposure)."""
     access_secret, _ = _get_secrets()
     return _create_token(
         {"sub": user_id, "type": "access"},
@@ -40,6 +46,7 @@ def create_access_token(user_id: str) -> str:
 
 
 def create_refresh_token(user_id: str) -> str:
+    """Create refresh token with 7 day expiry (security: max recommended for refresh tokens)."""
     _, refresh_secret = _get_secrets()
     return _create_token(
         {"sub": user_id, "type": "refresh"},

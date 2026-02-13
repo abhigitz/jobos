@@ -73,7 +73,16 @@ app = FastAPI(title="JobOS API", version="0.2.0", lifespan=lifespan, redirect_sl
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
+# CORS must be first in execution order (add last - Starlette runs last-added first)
+# so CORS headers are added even on redirect responses (e.g. 307)
 app.add_middleware(TrailingSlashMiddleware)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[settings.frontend_url, "http://localhost:3000", "http://localhost:5173"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 
 @app.middleware("http")
@@ -100,18 +109,6 @@ async def log_requests(request: Request, call_next):
 
     response.headers["X-Request-ID"] = request_id
     return response
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=(
-        [settings.frontend_url, "http://localhost:3000"]
-        if settings.debug
-        else [settings.frontend_url]
-    ),
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
 
 
 @app.middleware("http")

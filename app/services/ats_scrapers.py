@@ -17,7 +17,33 @@ from app.services.serpapi_service import (
 
 logger = logging.getLogger(__name__)
 
-# Slug -> display name for target companies
+# Company key -> Greenhouse board ID
+GREENHOUSE_COMPANIES: dict[str, str] = {
+    "phonepe": "phonepe",
+    "razorpay": "razorpaysoftwareprivatelimited",
+    "flipkart": "flipkart",
+    "myntra": "myntra",
+    "groww": "groww",
+    "zerodha": "zerodha",
+    "curefit": "caborneoadvisors",  # Cult.fit parent company
+    "urban_company": "urbancompany",
+    "lenskart": "laborx",  # Lenskart's Greenhouse board
+    "nykaa": "nykaa",
+}
+
+# Company key -> Lever posting ID
+LEVER_COMPANIES: dict[str, str] = {
+    "cred": "cred",
+    "meesho": "meesho",
+    "zepto": "zepto",
+    "jupiter": "jupiter-money",
+    "slice": "slicepay",
+    "khatabook": "khatabook",
+    "unacademy": "unacademy",
+    "sharechat": "sharechatapp",
+}
+
+# Slug -> display name for special cases
 COMPANY_SLUG_TO_NAME: dict[str, str] = {
     "phonepe": "PhonePe",
     "razorpaysoftwareprivatelimited": "Razorpay",
@@ -39,199 +65,199 @@ def _strip_html(html: str | None) -> str | None:
     return text if text else None
 
 
-async def fetch_greenhouse_jobs(company_slug: str) -> list[dict[str, Any]]:
+async def fetch_greenhouse_jobs() -> list[dict[str, Any]]:
     """
-    Fetch jobs from Greenhouse job board.
-    URL: https://boards-api.greenhouse.io/v1/boards/{company_slug}/jobs
+    Fetch jobs from all Greenhouse companies.
+    URL: https://boards-api.greenhouse.io/v1/boards/{board_id}/jobs
     Returns normalized job dicts with: title, location, url, company_name, source="greenhouse"
     """
-    url = f"https://boards-api.greenhouse.io/v1/boards/{company_slug}/jobs"
-    jobs: list[dict[str, Any]] = []
+    all_jobs: list[dict[str, Any]] = []
 
-    try:
-        async with httpx.AsyncClient(timeout=30.0) as client:
-            resp = await client.get(url)
+    for company_name, board_id in GREENHOUSE_COMPANIES.items():
+        url = f"https://boards-api.greenhouse.io/v1/boards/{board_id}/jobs"
+        display_name = COMPANY_SLUG_TO_NAME.get(company_name.lower(), company_name.replace("_", " ").title())
 
-        if resp.status_code != 200:
-            logger.warning(f"Greenhouse {company_slug}: HTTP {resp.status_code}")
-            return []
+        try:
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                resp = await client.get(url)
 
-        data = resp.json()
-        raw_jobs = data.get("jobs") if isinstance(data, dict) else []
-
-        if not isinstance(raw_jobs, list):
-            return []
-
-        company_name = _company_name_from_slug(company_slug)
-        now = datetime.now(timezone.utc)
-
-        for raw in raw_jobs:
-            if not isinstance(raw, dict):
-                continue
-            title = raw.get("title") or ""
-            if not title:
+            if resp.status_code != 200:
+                logger.warning(f"Greenhouse {company_name} ({board_id}): HTTP {resp.status_code}")
                 continue
 
-            loc_obj = raw.get("location")
-            location = loc_obj.get("name", "") if isinstance(loc_obj, dict) else (loc_obj or "")
-            if isinstance(location, str):
-                location = location.strip() or None
-            else:
-                location = str(location) if location else None
+            data = resp.json()
+            raw_jobs = data.get("jobs") if isinstance(data, dict) else []
 
-            url_val = raw.get("absolute_url") or ""
-            if not url_val:
+            if not isinstance(raw_jobs, list):
                 continue
 
-            content = raw.get("content")
-            description = _strip_html(content) if content else None
+            now = datetime.now(timezone.utc)
 
-            company_norm = normalize_company(company_name)
-            city = extract_city(location) if location else None
-            dedup_hash = generate_dedup_hash(company_name, title, location or "")
+            for raw in raw_jobs:
+                if not isinstance(raw, dict):
+                    continue
+                title = raw.get("title") or ""
+                if not title:
+                    continue
 
-            jobs.append({
-                "external_id": str(raw.get("id", "")),
-                "dedup_hash": dedup_hash,
-                "title": title,
-                "company_name": company_name,
-                "company_name_normalized": company_norm,
-                "location": location,
-                "city": city,
-                "description": description,
-                "salary_min": None,
-                "salary_max": None,
-                "salary_is_estimated": False,
-                "source": "greenhouse",
-                "source_url": url_val,
-                "apply_url": url_val,
-                "posted_date": None,
-                "scouted_at": now,
-                "last_seen_at": now,
-                "raw_json": raw,
-                "search_query": None,
-            })
+                loc_obj = raw.get("location")
+                location = loc_obj.get("name", "") if isinstance(loc_obj, dict) else (loc_obj or "")
+                if isinstance(location, str):
+                    location = location.strip() or None
+                else:
+                    location = str(location) if location else None
 
-    except httpx.HTTPError as e:
-        logger.warning(f"Greenhouse {company_slug}: HTTP error: {e}")
-    except Exception as e:
-        logger.warning(f"Greenhouse {company_slug}: error: {e}")
+                url_val = raw.get("absolute_url") or ""
+                if not url_val:
+                    continue
 
-    return jobs
+                content = raw.get("content")
+                description = _strip_html(content) if content else None
+
+                company_norm = normalize_company(display_name)
+                city = extract_city(location) if location else None
+                dedup_hash = generate_dedup_hash(display_name, title, location or "")
+
+                all_jobs.append({
+                    "external_id": str(raw.get("id", "")),
+                    "dedup_hash": dedup_hash,
+                    "title": title,
+                    "company_name": display_name,
+                    "company_name_normalized": company_norm,
+                    "location": location,
+                    "city": city,
+                    "description": description,
+                    "salary_min": None,
+                    "salary_max": None,
+                    "salary_is_estimated": False,
+                    "source": "greenhouse",
+                    "source_url": url_val,
+                    "apply_url": url_val,
+                    "posted_date": None,
+                    "scouted_at": now,
+                    "last_seen_at": now,
+                    "raw_json": raw,
+                    "search_query": None,
+                })
+
+        except httpx.HTTPError as e:
+            logger.warning(f"Greenhouse {company_name} ({board_id}): HTTP error: {e}")
+        except Exception as e:
+            logger.warning(f"Greenhouse {company_name} ({board_id}): error: {e}")
+
+    return all_jobs
 
 
-async def fetch_lever_jobs(company_slug: str) -> list[dict[str, Any]]:
+async def fetch_lever_jobs() -> list[dict[str, Any]]:
     """
-    Fetch jobs from Lever postings API.
-    URL: https://api.lever.co/v0/postings/{company_slug}?mode=json
+    Fetch jobs from all Lever companies.
+    URL: https://api.lever.co/v0/postings/{lever_id}?mode=json
     Returns normalized job dicts with: title, location, url, company_name, source="lever"
     """
-    url = f"https://api.lever.co/v0/postings/{company_slug}?mode=json"
-    jobs: list[dict[str, Any]] = []
+    all_jobs: list[dict[str, Any]] = []
 
-    try:
-        async with httpx.AsyncClient(timeout=30.0) as client:
-            resp = await client.get(url)
+    for company_name, lever_id in LEVER_COMPANIES.items():
+        url = f"https://api.lever.co/v0/postings/{lever_id}?mode=json"
+        display_name = COMPANY_SLUG_TO_NAME.get(company_name.lower(), company_name.replace("_", " ").title())
 
-        if resp.status_code != 200:
-            logger.warning(f"Lever {company_slug}: HTTP {resp.status_code}")
-            return []
+        try:
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                resp = await client.get(url)
 
-        data = resp.json()
-        if not isinstance(data, list):
-            return []
-
-        company_name = _company_name_from_slug(company_slug)
-        now = datetime.now(timezone.utc)
-
-        for raw in data:
-            if not isinstance(raw, dict):
-                continue
-            title = raw.get("text") or raw.get("title") or ""
-            if not title:
+            if resp.status_code != 200:
+                logger.warning(f"Lever {company_name} ({lever_id}): HTTP {resp.status_code}")
                 continue
 
-            categories = raw.get("categories") or {}
-            if isinstance(categories, dict):
-                location = categories.get("location") or ""
-                all_locs = categories.get("allLocations") or []
-                if not location and all_locs:
-                    location = ", ".join(all_locs) if isinstance(all_locs[0], str) else str(all_locs[0])
-            else:
-                location = ""
-
-            location = location.strip() or None if location else None
-
-            url_val = raw.get("hostedUrl") or raw.get("url") or ""
-            if not url_val:
+            data = resp.json()
+            if not isinstance(data, list):
                 continue
 
-            company_norm = normalize_company(company_name)
-            city = extract_city(location) if location else None
-            dedup_hash = generate_dedup_hash(company_name, title, location or "")
+            now = datetime.now(timezone.utc)
 
-            jobs.append({
-                "external_id": str(raw.get("id", "")),
-                "dedup_hash": dedup_hash,
-                "title": title,
-                "company_name": company_name,
-                "company_name_normalized": company_norm,
-                "location": location,
-                "city": city,
-                "description": raw.get("descriptionPlain") or raw.get("description") or None,
-                "salary_min": None,
-                "salary_max": None,
-                "salary_is_estimated": False,
-                "source": "lever",
-                "source_url": url_val,
-                "apply_url": raw.get("applyUrl") or url_val,
-                "posted_date": None,
-                "scouted_at": now,
-                "last_seen_at": now,
-                "raw_json": raw,
-                "search_query": None,
-            })
+            for raw in data:
+                if not isinstance(raw, dict):
+                    continue
+                title = raw.get("text") or raw.get("title") or ""
+                if not title:
+                    continue
 
-    except httpx.HTTPError as e:
-        logger.warning(f"Lever {company_slug}: HTTP error: {e}")
-    except Exception as e:
-        logger.warning(f"Lever {company_slug}: error: {e}")
+                categories = raw.get("categories") or {}
+                if isinstance(categories, dict):
+                    location = categories.get("location") or ""
+                    all_locs = categories.get("allLocations") or []
+                    if not location and all_locs:
+                        location = ", ".join(all_locs) if isinstance(all_locs[0], str) else str(all_locs[0])
+                else:
+                    location = ""
 
-    return jobs
+                location = location.strip() or None if location else None
+
+                url_val = raw.get("hostedUrl") or raw.get("url") or ""
+                if not url_val:
+                    continue
+
+                company_norm = normalize_company(display_name)
+                city = extract_city(location) if location else None
+                dedup_hash = generate_dedup_hash(display_name, title, location or "")
+
+                all_jobs.append({
+                    "external_id": str(raw.get("id", "")),
+                    "dedup_hash": dedup_hash,
+                    "title": title,
+                    "company_name": display_name,
+                    "company_name_normalized": company_norm,
+                    "location": location,
+                    "city": city,
+                    "description": raw.get("descriptionPlain") or raw.get("description") or None,
+                    "salary_min": None,
+                    "salary_max": None,
+                    "salary_is_estimated": False,
+                    "source": "lever",
+                    "source_url": url_val,
+                    "apply_url": raw.get("applyUrl") or url_val,
+                    "posted_date": None,
+                    "scouted_at": now,
+                    "last_seen_at": now,
+                    "raw_json": raw,
+                    "search_query": None,
+                })
+
+        except httpx.HTTPError as e:
+            logger.warning(f"Lever {company_name} ({lever_id}): HTTP error: {e}")
+        except Exception as e:
+            logger.warning(f"Lever {company_name} ({lever_id}): error: {e}")
+
+    return all_jobs
 
 
 async def fetch_target_company_jobs() -> list[dict[str, Any]]:
     """
-    Fetch jobs from target companies: Greenhouse (phonepe, razorpay) and Lever (cred, meesho).
+    Fetch jobs from target companies: Greenhouse and Lever.
     Combines all results. Handles errors gracefully (if one fails, continue with others).
     """
     all_jobs: list[dict[str, Any]] = []
     seen_hashes: set[str] = set()
 
     # Greenhouse companies
-    greenhouse_slugs = ["phonepe", "razorpaysoftwareprivatelimited"]
-    for slug in greenhouse_slugs:
-        try:
-            jobs = await fetch_greenhouse_jobs(slug)
-            for job in jobs:
-                h = job.get("dedup_hash")
-                if h and h not in seen_hashes:
-                    seen_hashes.add(h)
-                    all_jobs.append(job)
-        except Exception as e:
-            logger.warning(f"fetch_target_company_jobs: Greenhouse {slug} failed: {e}")
+    try:
+        jobs = await fetch_greenhouse_jobs()
+        for job in jobs:
+            h = job.get("dedup_hash")
+            if h and h not in seen_hashes:
+                seen_hashes.add(h)
+                all_jobs.append(job)
+    except Exception as e:
+        logger.warning(f"fetch_target_company_jobs: Greenhouse failed: {e}")
 
     # Lever companies
-    lever_slugs = ["cred", "meesho"]
-    for slug in lever_slugs:
-        try:
-            jobs = await fetch_lever_jobs(slug)
-            for job in jobs:
-                h = job.get("dedup_hash")
-                if h and h not in seen_hashes:
-                    seen_hashes.add(h)
-                    all_jobs.append(job)
-        except Exception as e:
-            logger.warning(f"fetch_target_company_jobs: Lever {slug} failed: {e}")
+    try:
+        jobs = await fetch_lever_jobs()
+        for job in jobs:
+            h = job.get("dedup_hash")
+            if h and h not in seen_hashes:
+                seen_hashes.add(h)
+                all_jobs.append(job)
+    except Exception as e:
+        logger.warning(f"fetch_target_company_jobs: Lever failed: {e}")
 
     return all_jobs

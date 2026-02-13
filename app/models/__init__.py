@@ -4,6 +4,8 @@ from .company import Company
 from .job import Job
 from .contact import Contact
 from .content import ContentCalendar
+from .content_post import ContentPost
+from .content_topic import ContentTopic
 from .daily_log import DailyLog
 from .weekly_metrics import WeeklyMetrics
 from .resume_variant import ResumeVariant
@@ -14,6 +16,9 @@ from .email_verification_token import EmailVerificationToken
 from .password_reset_token import PasswordResetToken
 from .resume import ResumeFile
 from .scout_result import ScoutResult
+from .story_prompt_shown import StoryPromptShown
+from .user_content_settings import UserContentSettings
+from .user_story import UserStory
 
 __all__ = [
     "User",
@@ -23,6 +28,8 @@ __all__ = [
     "Job",
     "Contact",
     "ContentCalendar",
+    "ContentPost",
+    "ContentTopic",
     "DailyLog",
     "WeeklyMetrics",
     "ResumeVariant",
@@ -33,4 +40,7 @@ __all__ = [
     "PasswordResetToken",
     "ResumeFile",
     "ScoutResult",
+    "StoryPromptShown",
+    "UserContentSettings",
+    "UserStory",
 ]

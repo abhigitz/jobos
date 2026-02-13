@@ -119,6 +119,7 @@ from .routers import (  # noqa: E402
     companies,
     contacts,
     content,
+    content_studio,
     daily_logs,
     interviews,
     jobs,
@@ -137,6 +138,7 @@ app.include_router(jobs.router, prefix="/api/jobs", tags=["jobs"])
 app.include_router(companies.router, prefix="/api/companies", tags=["companies"])
 app.include_router(contacts.router, prefix="/api/contacts", tags=["contacts"])
 app.include_router(content.router, prefix="/api/content", tags=["content"])
+app.include_router(content_studio.router)
 app.include_router(analytics.router, prefix="/api/analytics", tags=["analytics"])
 app.include_router(briefing.router, prefix="/api/briefing", tags=["briefing"])
 app.include_router(briefings_user.router, prefix="/api/briefings", tags=["briefings"])

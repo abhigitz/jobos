@@ -449,6 +449,113 @@ Mark each company as 🟢 (actively hiring), 🟡 (stable), or 🔴 (freezing/la
 
 
 @retry_on_failure(max_retries=3)
+async def generate_linkedin_post(
+    topic_title: str,
+    category: str,
+    angle: str | None,
+    profile: dict[str, Any],
+    stories: list,
+    avoid_specific_numbers: bool = True,
+    instruction: str | None = None,
+) -> str | None:
+    """Generate a LinkedIn post with humanization rules."""
+
+    stories_context = ""
+    if stories:
+        stories_context = "\n\nPERSONAL STORIES TO WEAVE IN (use naturally, don't force):\n"
+        for s in stories[:2]:
+            text = getattr(s, "story_text", str(s))[:200] if s else ""
+            stories_context += f"- {text}...\n"
+
+    instruction_text = ""
+    if instruction:
+        instruction_text = f"\n\nSPECIAL INSTRUCTION: {instruction}"
+
+    number_guidance = ""
+    if avoid_specific_numbers:
+        number_guidance = """
+IMPORTANT - NUMBER USAGE:
+- DON'T say: "$7M budget", "$200M ARR", "40-person team"
+- DO say: "large-scale budget", "significant revenue", "sizable team"
+- Only use specific numbers when they're the POINT of the post (e.g., "9-month payback")
+"""
+
+    prompt = f"""Write a LinkedIn post about this topic.
+
+TOPIC: {topic_title}
+CATEGORY: {category}
+ANGLE: {angle or 'thoughtful observation'}
+
+AUTHOR CONTEXT:
+{json.dumps(profile, indent=2, default=str)}
+{stories_context}
+{instruction_text}
+
+HUMANIZATION RULES (CRITICAL - follow exactly):
+1. NEVER use em-dashes (—)
+2. NEVER start with "I"
+3. NEVER use "In my experience...", "Here's the truth...", "Let me tell you..."
+4. DO start with a statement, observation, or provocative question
+5. DO include ONE incomplete sentence or fragment
+6. DO admit uncertainty somewhere ("I'm still figuring this out", "I might be wrong")
+7. DO end with a genuine question (not rhetorical)
+8. Keep it 150-250 words
+9. No hashtags
+10. No emojis in first line
+{number_guidance}
+
+STRUCTURE VARIETY (don't always use the same pattern):
+- Sometimes: Hook → Story → Insight → Question
+- Sometimes: Observation → Counter-point → Personal take
+- Sometimes: Question → My answer → Why I think this → Your turn
+- Sometimes: Specific moment → Zoom out → Lesson
+
+Write the post now. Return ONLY the post text, nothing else."""
+
+    response = await client.messages.create(
+        model=_get_model("content"),
+        max_tokens=1000,
+        messages=[{"role": "user", "content": prompt}],
+    )
+
+    return response.content[0].text.strip()
+
+
+@retry_on_failure(max_retries=3)
+async def generate_content_studio_topics(
+    profile: dict[str, Any], categories: list[str] | None = None
+) -> list[dict[str, Any]] | None:
+    """Generate Content Studio v2 topics with angle and suggested_creative."""
+    cats = categories or ["Growth", "Career", "Leadership", "GenAI", "Industry", "Personal"]
+    cats_str = "|".join(cats)
+
+    prompt = f"""Generate 7 LinkedIn post topics for this profile.
+
+PROFILE:
+{json.dumps(profile, indent=2, default=str)}
+
+CATEGORIES TO USE (pick from): {cats_str}
+
+Return ONLY valid JSON:
+{{
+  "topics": [
+    {{
+      "topic_title": "short catchy title",
+      "category": "one of the categories",
+      "angle": "contrarian|how-to|story|question|observation",
+      "suggested_creative": "text|image|carousel"
+    }}
+  ]
+}}"""
+
+    result = await call_claude(prompt, max_tokens=1000, task_type="content")
+    data = parse_json_response(result)
+    if not data:
+        return None
+    return data.get("topics", [])
+
+
+@retry_on_failure(max_retries=3)
 async def generate_content_topics(profile: dict[str, Any]) -> list[dict[str, str]] | None:
     prompt = f"""Generate 7 LinkedIn post topics for this profile.
 

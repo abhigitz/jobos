@@ -3,6 +3,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, or_, func
 
 from app.database import get_db
+from app.utils import escape_like
 from app.dependencies import get_current_user
 from app.models.user import User
 from app.models.job import Job
@@ -19,7 +20,7 @@ async def global_search(
     current_user: User = Depends(get_current_user),
 ):
     """Search across jobs, companies, and contacts."""
-    search_term = f"%{q.lower()}%"
+    search_term = f"%{escape_like(q.lower())}%"
 
     # Search jobs (using role_title as title, is_deleted for soft delete)
     jobs_result = await db.execute(

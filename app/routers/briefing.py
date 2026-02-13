@@ -130,9 +130,20 @@ async def morning_briefing(
                 await send_telegram_message(user.telegram_chat_id, text)  # type: ignore[arg-type]
         except (HTTPException, SQLAlchemyError, AIServiceError) as e:
             logger.error("morning briefing failed for user %s: %s", user.id, e)
+        except ValueError as e:
+            logger.warning("Validation error in morning briefing for user %s: %s", user.id, e)
+            raise HTTPException(status_code=400, detail=str(e))
+        except KeyError as e:
+            logger.warning("Missing key in morning briefing for user %s: %s", user.id, e)
+            raise HTTPException(status_code=400, detail=f"Missing required field: {e}")
         except Exception as e:
-            logger.exception("Unexpected error in morning briefing for user %s: %s", user.id, e)
-            raise
+            logger.exception(
+                "Unexpected error in morning briefing for user %s: %s: %s",
+                user.id,
+                type(e).__name__,
+                e,
+            )
+            raise HTTPException(status_code=500, detail="Internal server error")
     return {"status": "ok"}
 
 
@@ -155,9 +166,20 @@ async def midday_briefing(
                 await send_telegram_message(user.telegram_chat_id, text)  # type: ignore[arg-type]
         except (HTTPException, SQLAlchemyError, AIServiceError) as e:
             logger.error("midday briefing failed for user %s: %s", user.id, e)
+        except ValueError as e:
+            logger.warning("Validation error in midday briefing for user %s: %s", user.id, e)
+            raise HTTPException(status_code=400, detail=str(e))
+        except KeyError as e:
+            logger.warning("Missing key in midday briefing for user %s: %s", user.id, e)
+            raise HTTPException(status_code=400, detail=f"Missing required field: {e}")
         except Exception as e:
-            logger.exception("Unexpected error in midday briefing for user %s: %s", user.id, e)
-            raise
+            logger.exception(
+                "Unexpected error in midday briefing for user %s: %s: %s",
+                user.id,
+                type(e).__name__,
+                e,
+            )
+            raise HTTPException(status_code=500, detail="Internal server error")
     return {"status": "ok"}
 
 
@@ -179,9 +201,20 @@ async def evening_prompt(
             await send_telegram_message(user.telegram_chat_id, text)  # type: ignore[arg-type]
         except (HTTPException, SQLAlchemyError, AIServiceError) as e:
             logger.error("evening prompt failed for user %s: %s", user.id, e)
+        except ValueError as e:
+            logger.warning("Validation error in evening prompt for user %s: %s", user.id, e)
+            raise HTTPException(status_code=400, detail=str(e))
+        except KeyError as e:
+            logger.warning("Missing key in evening prompt for user %s: %s", user.id, e)
+            raise HTTPException(status_code=400, detail=f"Missing required field: {e}")
         except Exception as e:
-            logger.exception("Unexpected error in evening prompt for user %s: %s", user.id, e)
-            raise
+            logger.exception(
+                "Unexpected error in evening prompt for user %s: %s: %s",
+                user.id,
+                type(e).__name__,
+                e,
+            )
+            raise HTTPException(status_code=500, detail="Internal server error")
     return {"status": "ok"}
 
 
@@ -260,9 +293,20 @@ async def content_draft_briefing(
                 await send_telegram_message(user.telegram_chat_id, draft)  # type: ignore[arg-type]
         except (HTTPException, SQLAlchemyError, AIServiceError) as e:
             logger.error("content draft briefing failed for user %s: %s", user.id, e)
+        except ValueError as e:
+            logger.warning("Validation error in content draft briefing for user %s: %s", user.id, e)
+            raise HTTPException(status_code=400, detail=str(e))
+        except KeyError as e:
+            logger.warning("Missing key in content draft briefing for user %s: %s", user.id, e)
+            raise HTTPException(status_code=400, detail=f"Missing required field: {e}")
         except Exception as e:
-            logger.exception("Unexpected error in content draft briefing for user %s: %s", user.id, e)
-            raise
+            logger.exception(
+                "Unexpected error in content draft briefing for user %s: %s: %s",
+                user.id,
+                type(e).__name__,
+                e,
+            )
+            raise HTTPException(status_code=500, detail="Internal server error")
     return {"status": "ok"}
 
 
@@ -301,9 +345,20 @@ async def weekly_review_briefing(
                 await send_telegram_message(user.telegram_chat_id, text)  # type: ignore[arg-type]
         except (HTTPException, SQLAlchemyError, AIServiceError) as e:
             logger.error("weekly review briefing failed for user %s: %s", user.id, e)
+        except ValueError as e:
+            logger.warning("Validation error in weekly review briefing for user %s: %s", user.id, e)
+            raise HTTPException(status_code=400, detail=str(e))
+        except KeyError as e:
+            logger.warning("Missing key in weekly review briefing for user %s: %s", user.id, e)
+            raise HTTPException(status_code=400, detail=f"Missing required field: {e}")
         except Exception as e:
-            logger.exception("Unexpected error in weekly review briefing for user %s: %s", user.id, e)
-            raise
+            logger.exception(
+                "Unexpected error in weekly review briefing for user %s: %s: %s",
+                user.id,
+                type(e).__name__,
+                e,
+            )
+            raise HTTPException(status_code=500, detail="Internal server error")
     return {"status": "ok"}
 
 
@@ -351,9 +406,20 @@ async def company_deep_dive_briefing(
             results.append({"user_id": str(user.id), "company": company.name})
         except (HTTPException, SQLAlchemyError, AIServiceError) as e:
             logger.error("company deep dive failed for user %s: %s", user.id, e)
+        except ValueError as e:
+            logger.warning("Validation error in company deep dive for user %s: %s", user.id, e)
+            raise HTTPException(status_code=400, detail=str(e))
+        except KeyError as e:
+            logger.warning("Missing key in company deep dive for user %s: %s", user.id, e)
+            raise HTTPException(status_code=400, detail=f"Missing required field: {e}")
         except Exception as e:
-            logger.exception("Unexpected error in company deep dive for user %s: %s", user.id, e)
-            raise
+            logger.exception(
+                "Unexpected error in company deep dive for user %s: %s: %s",
+                user.id,
+                type(e).__name__,
+                e,
+            )
+            raise HTTPException(status_code=500, detail="Internal server error")
     return {"success": True, "results": results}
 
 
@@ -452,9 +518,20 @@ async def jd_patterns_briefing(
             await send_telegram_message(user.telegram_chat_id, "\n".join(lines))  # type: ignore[arg-type]
         except (HTTPException, SQLAlchemyError, AIServiceError) as e:
             logger.error("jd patterns briefing failed for user %s: %s", user.id, e)
+        except ValueError as e:
+            logger.warning("Validation error in jd patterns briefing for user %s: %s", user.id, e)
+            raise HTTPException(status_code=400, detail=str(e))
+        except KeyError as e:
+            logger.warning("Missing key in jd patterns briefing for user %s: %s", user.id, e)
+            raise HTTPException(status_code=400, detail=f"Missing required field: {e}")
         except Exception as e:
-            logger.exception("Unexpected error in jd patterns briefing for user %s: %s", user.id, e)
-            raise
+            logger.exception(
+                "Unexpected error in jd patterns briefing for user %s: %s: %s",
+                user.id,
+                type(e).__name__,
+                e,
+            )
+            raise HTTPException(status_code=500, detail="Internal server error")
     return {"success": True}
 
 
@@ -528,9 +605,20 @@ async def interview_prep_briefing(
                 await send_telegram_message(user.telegram_chat_id, text)  # type: ignore[arg-type]
         except (HTTPException, SQLAlchemyError, AIServiceError) as e:
             logger.error("interview prep briefing failed for user %s: %s", user.id, e)
+        except ValueError as e:
+            logger.warning("Validation error in interview prep briefing for user %s: %s", user.id, e)
+            raise HTTPException(status_code=400, detail=str(e))
+        except KeyError as e:
+            logger.warning("Missing key in interview prep briefing for user %s: %s", user.id, e)
+            raise HTTPException(status_code=400, detail=f"Missing required field: {e}")
         except Exception as e:
-            logger.exception("Unexpected error in interview prep briefing for user %s: %s", user.id, e)
-            raise
+            logger.exception(
+                "Unexpected error in interview prep briefing for user %s: %s: %s",
+                user.id,
+                type(e).__name__,
+                e,
+            )
+            raise HTTPException(status_code=500, detail="Internal server error")
     if not any_found:
         return {"success": True, "message": "No upcoming interviews"}
     return {"success": True}
@@ -576,7 +664,18 @@ async def market_intel_briefing(
             await send_telegram_message(user.telegram_chat_id, text)  # type: ignore[arg-type]
         except (HTTPException, SQLAlchemyError, AIServiceError) as e:
             logger.error("market intel briefing failed for user %s: %s", user.id, e)
+        except ValueError as e:
+            logger.warning("Validation error in market intel briefing for user %s: %s", user.id, e)
+            raise HTTPException(status_code=400, detail=str(e))
+        except KeyError as e:
+            logger.warning("Missing key in market intel briefing for user %s: %s", user.id, e)
+            raise HTTPException(status_code=400, detail=f"Missing required field: {e}")
         except Exception as e:
-            logger.exception("Unexpected error in market intel briefing for user %s: %s", user.id, e)
-            raise
+            logger.exception(
+                "Unexpected error in market intel briefing for user %s: %s: %s",
+                user.id,
+                type(e).__name__,
+                e,
+            )
+            raise HTTPException(status_code=500, detail="Internal server error")
     return {"success": True}

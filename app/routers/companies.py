@@ -4,6 +4,7 @@ from sqlalchemy.exc import ProgrammingError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
+from app.utils import escape_like
 from app.dependencies import get_current_user, limiter
 from app.models.company import Company
 from app.models.profile import ProfileDNA
@@ -80,7 +81,7 @@ async def search_companies(
             select(Company)
             .where(
                 Company.user_id == current_user.id,
-                Company.name.ilike(f"%{q}%"),
+                Company.name.ilike(f"%{escape_like(q)}%"),
             )
             .order_by(Company.name)
             .limit(5)

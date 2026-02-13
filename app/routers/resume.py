@@ -1,6 +1,7 @@
 """Resume file upload, download, and management."""
 import io
 import logging
+import os
 from pathlib import Path
 from uuid import UUID
 
@@ -28,10 +29,26 @@ _DBG = Path(__file__).resolve().parents[2] / ".cursor" / "debug.log"
 
 
 def _dbg(msg: str, data: dict, hypothesis_id: str) -> None:
+    if os.getenv("JOBOS_DEBUG", "").lower() != "true":
+        return
     try:
-        import json, time
+        import json
+        import time
+
         with open(_DBG, "a") as f:
-            f.write(json.dumps({"id": msg, "timestamp": time.time() * 1000, "location": "resume.py", "message": msg, "data": data, "hypothesisId": hypothesis_id}) + "\n")
+            f.write(
+                json.dumps(
+                    {
+                        "id": msg,
+                        "timestamp": time.time() * 1000,
+                        "location": "resume.py",
+                        "message": msg,
+                        "data": data,
+                        "hypothesisId": hypothesis_id,
+                    }
+                )
+                + "\n"
+            )
     except Exception as e:
         logger.debug(f"Resume debug helper failed: {e}")
     logger.info("[DEBUG] %s hypothesis=%s data=%s", msg, hypothesis_id, data)

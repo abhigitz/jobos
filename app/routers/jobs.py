@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm.attributes import flag_modified
 
 from app.database import get_db
+from app.utils import escape_like
 from app.dependencies import get_current_user
 from app.models.company import Company
 from app.models.contact import Contact
@@ -77,7 +78,7 @@ async def list_jobs(
     if status:
         base_query = base_query.where(Job.status == status)
     if company_name:
-        base_query = base_query.where(Job.company_name.ilike(f"%{company_name}%"))
+        base_query = base_query.where(Job.company_name.ilike(f"%{escape_like(company_name)}%"))
     if source_portal:
         base_query = base_query.where(Job.source_portal == source_portal)
     if sort.startswith("-"):
@@ -623,7 +624,7 @@ async def global_search(
     types_set = {t.strip() for t in types.split(",")}
     results: dict[str, list[dict[str, Any]]] = {"jobs": [], "companies": [], "contacts": []}
 
-    like = f"%{q}%"
+    like = f"%{escape_like(q)}%"
 
     if "jobs" in types_set:
         j_rows = (

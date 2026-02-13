@@ -74,6 +74,10 @@ async def call_claude(prompt: str, max_tokens: int = 2000, task_type: str = "def
             max_tokens=max_tokens,
             messages=[{"role": "user", "content": prompt}],
         )
+        if not message.content or len(message.content) == 0:
+            raise AIServiceError("Claude returned empty response")
+        if not hasattr(message.content[0], "text"):
+            raise AIServiceError("Claude response missing text field")
         return message.content[0].text
     except (anthropic.RateLimitError, anthropic.InternalServerError):
         raise
@@ -519,6 +523,10 @@ Write the post now. Return ONLY the post text, nothing else."""
         messages=[{"role": "user", "content": prompt}],
     )
 
+    if not response.content or len(response.content) == 0:
+        raise AIServiceError("Claude returned empty response")
+    if not hasattr(response.content[0], "text"):
+        raise AIServiceError("Claude response missing text field")
     return response.content[0].text.strip()
 
 

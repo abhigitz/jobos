@@ -44,7 +44,7 @@ app/
 
 | Error | Location | Description |
 |-------|----------|-------------|
-| **Unawaited `create_task`** | `app/tasks/db_backup.py:93` | `asyncio.create_task(send_telegram_message(...))` is fire-and-forget. Task may not complete before process exit; exceptions are not propagated. |
+| *(None currently)* | — | `db_backup.py` awaits `send_telegram_message`; no unawaited tasks. |
 
 ### 3. **Exception Handling**
 
@@ -65,7 +65,7 @@ app/
 
 | Error | Location | Description |
 |-------|----------|-------------|
-| **`datetime.utcnow()`** | `app/routers/content.py`, `app/routers/briefing.py`, `app/tasks/db_backup.py` | Deprecated in Python 3.12+. Prefer `datetime.now(timezone.utc)`. |
+| *(None currently)* | — | Codebase uses `datetime.now(timezone.utc)`; no `utcnow()` found. |
 
 ### 6. **Transaction & Commit**
 
@@ -85,8 +85,8 @@ app/
 
 | Error | Location | Description |
 |-------|----------|-------------|
-| **`call_claude` returns `None`** | `app/services/ai_service.py:81` | On non-retryable APIError, returns `None`. Callers must handle None (e.g. jobs, profile, content routers). |
-| **`message.content[0].text`** | `app/services/ai_service.py:76` | Assumes `content[0]` exists and has `.text`. Empty or malformed responses can raise `IndexError` or `AttributeError`. |
+| **`call_claude` raises on APIError** | `app/services/ai_service.py:80-81` | On non-retryable `anthropic.APIError`, raises `AIServiceError`. Callers must catch; `profile.py:115` checks `raw_result is None` (defensive, never true for `call_claude`). |
+| **`message.content[0].text`** | `app/services/ai_service.py:77`, `:522` | Assumes `content[0]` exists and has `.text`. Empty or malformed Claude responses can raise `IndexError` or `AttributeError`. |
 
 ### 9. **HTTPException Usage**
 
@@ -98,8 +98,8 @@ app/
 
 | Error | Location | Description |
 |-------|----------|-------------|
-| **Hardcoded paths** | `app/main.py:51`, `app/exception_handler:162` | `Path(__file__).parent.parent / ".cursor" / "debug.log"` and `debug_resume.log` are hardcoded. May fail if run from different cwd. |
-| **Debug middleware writes on every resume request** | `app/main.py:46-56` | Writes to `debug.log` on every `/api/resume` request; can cause I/O overhead. |
+| **Hardcoded debug paths** | `app/main.py:199`, `app/routers/resume.py:27-28` | Exception handler writes to `app/debug_resume.log`; resume router uses `parents[2]` for `.cursor/debug.log`. Paths depend on `__file__`; may differ if run from different cwd. |
+| **Resume `_dbg` writes on every upload** | `app/routers/resume.py` | `_dbg()` appends to `.cursor/debug.log` on resume operations; can cause I/O overhead in high-traffic scenarios. |
 
 ### 11. **Scheduler**
 
@@ -114,6 +114,24 @@ app/
 |-------|----------|-------------|
 | **Return type inconsistency** | `app/services/jd_extractor.py` | Returns `str` on success, `dict` on generic exception. Jobs router checks `isinstance(result, dict)` before using dict. Logic is correct. |
 
+### 13. **Search & LIKE Patterns**
+
+| Error | Location | Description |
+|-------|----------|-------------|
+| **LIKE wildcard in user input** | `app/routers/search.py:22`, `app/routers/jobs.py:80`, `app/routers/companies.py:83` | `search_term = f"%{q.lower()}%"` — user input `q` containing `%` or `_` alters LIKE semantics (e.g. `%` matches anything). SQLAlchemy uses bound params (no SQL injection), but search behavior can be surprising. |
+
+### 14. **n8n Secret Bypass**
+
+| Error | Location | Description |
+|-------|----------|-------------|
+| **n8n secret grants full owner access** | `app/dependencies.py:70-76` | If `X-N8N-Secret` matches and `owner_email` is set, request is authenticated as owner without JWT. Ensure `n8n_secret` is strong and not exposed. |
+
+### 15. **Redis / Rate Limiting**
+
+| Error | Location | Description |
+|-------|----------|-------------|
+| **Redis optional** | `app/config.py` | `redis_url` is optional. If unset, SlowAPI/limits may fall back to in-memory storage; rate limits won't persist across restarts or multiple instances. |
+
 ---
 
 ## Summary Table
@@ -121,17 +139,17 @@ app/
 | Category | Count | Severity |
 |----------|-------|----------|
 | Database/Schema | 3 | Medium |
-| Async/Fire-and-forget | 1 | Low |
 | Exception handling | 4+ | Low–Medium |
 | Type/Validation | 2 | Low |
-| Deprecated APIs | 1 | Low |
 | Transaction | 2 | Low |
-| Config/Security | 2 | Low |
+| Config/Security | 3 | Low |
 | AI Service | 2 | Medium |
 | HTTPException | 1 | Cosmetic |
 | Debug/Logging | 2 | Low |
 | Scheduler | 2 | Low |
 | JD Extractor | 1 | Low |
+| Search/LIKE | 1 | Low |
+| n8n/Redis | 2 | Low |
 
 ---
 

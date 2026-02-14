@@ -1,6 +1,7 @@
 import asyncio
 import json
 import logging
+import re
 from datetime import datetime
 from functools import wraps
 from typing import Any, Dict, List, Optional
@@ -536,6 +537,62 @@ async def _call_claude_with_web_search(prompt: str, max_tokens: int = 8000) -> s
     return result
 
 
+def repair_truncated_json(text: str) -> dict:
+    """Attempt to repair and parse truncated JSON."""
+    text = text.strip()
+
+    # Remove markdown code fences if present
+    if text.startswith("```"):
+        text = re.sub(r'^```json?\s*', '', text)
+        text = re.sub(r'\s*```$', '', text)
+
+    # Try parsing as-is first
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError:
+        pass
+
+    # Count open/close braces and brackets
+    open_braces = text.count('{') - text.count('}')
+    open_brackets = text.count('[') - text.count(']')
+
+    # Try to close unclosed structures
+    repaired = text.rstrip()
+
+    # Remove trailing comma if present
+    if repaired.endswith(','):
+        repaired = repaired[:-1]
+
+    # Close any unclosed strings (look for odd number of unescaped quotes)
+    # Simple heuristic: if the last non-whitespace char before we add closures
+    # is not a valid JSON ending char, try adding a quote
+    last_char = repaired.rstrip()[-1] if repaired.rstrip() else ''
+    if last_char not in ['}', ']', '"', 'e', 'l', '0', '1', '2', '3', '4', '5', '6', '7', '8', '9']:
+        repaired += '"'
+
+    # Close brackets and braces
+    repaired += ']' * open_brackets
+    repaired += '}' * open_braces
+
+    try:
+        return json.loads(repaired)
+    except json.JSONDecodeError as e:
+        # Last resort: try to extract partial valid JSON
+        # Find the last complete object
+        for i in range(len(text), 0, -1):
+            try:
+                partial = text[:i]
+                # Try to close it
+                open_b = partial.count('{') - partial.count('}')
+                open_br = partial.count('[') - partial.count(']')
+                test = partial + ']' * open_br + '}' * open_b
+                return json.loads(test)
+            except Exception:
+                continue
+
+        raise ValueError(f"Could not repair JSON: {e}") from e
+
+
 def _clean_em_dashes(obj: Any) -> Any:
     """Recursively strip em dashes from string values."""
     if isinstance(obj, str):
@@ -552,96 +609,95 @@ async def generate_company_quick_research(
     company_name: str, custom_questions: Optional[str] = None
 ) -> Optional[dict]:
     """
-    Fast, cheap research using Claude Haiku.
+    Fast research using Claude Haiku with robust JSON handling.
     No web search - uses model knowledge only. Returns structured JSON.
     """
-    prompt = f"""Generate a company research summary for {company_name}.
+    # Simplified, shorter prompt to fit in token limit
+    prompt = f"""Generate a concise company research summary for {company_name}.
 
-Return ONLY valid JSON (no markdown, no code fences) with this structure:
+Return ONLY valid JSON with this exact structure (no markdown, no explanation):
+
 {{
   "company": {{
     "name": "{company_name}",
     "tagline": "One-line description",
     "founded": "Year",
     "headquarters": "City, Country",
-    "employees": "Count",
+    "employees": "Approximate count",
     "funding": "Total raised",
     "valuation": "Latest valuation",
     "ceo": "CEO Name",
-    "industry": "Industry"
+    "industry": "Primary industry"
   }},
   "overview": {{
-    "business_model": "2-3 sentence description of how they make money",
+    "business_model": "Brief 1-2 sentence description",
     "key_metrics": [
-      {{"label": "Revenue", "value": "₹X Cr", "growth": "+X% YoY", "context": "FY24"}},
-      {{"label": "Users", "value": "XM+", "growth": "+X%", "context": "MAU"}},
-      {{"label": "GMV", "value": "$XB", "growth": "+X%", "context": "Annual"}}
+      {{"label": "Revenue", "value": "Amount", "growth": "YoY%", "context": "Period"}},
+      {{"label": "Users", "value": "Count", "growth": "YoY%", "context": "Type"}},
+      {{"label": "GMV/Orders", "value": "Amount", "growth": "YoY%", "context": "Annual"}}
     ],
     "recent_news": [
-      {{"headline": "Recent news headline", "date": "Month Year", "impact": "Positive"}}
+      {{"headline": "Recent development", "date": "Month Year", "impact": "Positive"}}
     ],
     "strategic_priorities": ["Priority 1", "Priority 2", "Priority 3"]
   }},
   "competitors": [
     {{
-      "name": "Competitor Name",
+      "name": "Main Competitor",
       "color": "#3B82F6",
       "tagline": "Their positioning",
       "model": "Business model",
-      "revenue": "Revenue figure",
-      "market_share": "X%",
-      "strengths": ["Strength 1", "Strength 2", "Strength 3"],
-      "weaknesses": ["Weakness 1", "Weakness 2"],
+      "revenue": "Revenue",
+      "market_share": "Share%",
+      "strengths": ["S1", "S2"],
+      "weaknesses": ["W1", "W2"],
       "threat_level": "High"
     }}
   ],
   "positioning": {{
-    "competitive_advantages": ["Advantage 1", "Advantage 2", "Advantage 3"],
-    "market_position": "Description of market position",
-    "differentiation": "What makes them unique"
+    "competitive_advantages": ["Advantage 1", "Advantage 2"],
+    "market_position": "Brief description",
+    "differentiation": "Key differentiator"
   }},
   "user_personas": [
     {{
-      "name": "Persona Name",
+      "name": "Primary User",
       "emoji": "👤",
-      "age": "25-35",
+      "age": "Age range",
       "location": "Location type",
       "income": "Income range",
-      "behavior": "Key behaviors",
-      "goals": ["Goal 1", "Goal 2"],
-      "pain_points": ["Pain 1", "Pain 2"],
+      "behavior": "Key behavior",
+      "goals": ["Goal 1"],
+      "pain_points": ["Pain 1"],
       "platforms": "Where they engage"
     }}
   ],
   "opportunities": {{
-    "market_gaps": [{{"gap": "Gap description", "opportunity": "How to exploit", "difficulty": "Medium"}}],
+    "market_gaps": [{{"gap": "Gap", "opportunity": "Opportunity", "difficulty": "Medium"}}],
     "growth_levers": ["Lever 1", "Lever 2"],
-    "threats": ["Threat 1", "Threat 2"],
-    "strategic_recommendations": ["Recommendation 1", "Recommendation 2"]
+    "threats": ["Threat 1"],
+    "strategic_recommendations": ["Recommendation 1"]
   }},
   "interview_prep": {{
-    "likely_questions": [
-      {{"question": "Interview question?", "suggested_angle": "How to approach"}}
-    ],
+    "likely_questions": [{{"question": "Question?", "suggested_angle": "Approach"}}],
     "talking_points": ["Point 1", "Point 2"],
-    "red_flags_to_avoid": ["Avoid 1", "Avoid 2"],
-    "topics_to_research_further": ["Topic 1", "Topic 2"]
+    "red_flags_to_avoid": ["Avoid 1"],
+    "topics_to_research_further": ["Topic 1"]
   }},
   "custom_answers": {{"questions_answered": []}},
-  "sources": ["AI Analysis based on training data"],
+  "sources": ["AI Analysis"],
   "generated_at": "{datetime.utcnow().isoformat()}",
   "research_type": "quick"
 }}
 
-Include 3 competitors and 2 user personas. Be concise but accurate.
-{f"Also briefly answer: {custom_questions}" if custom_questions else ""}
-
-Return ONLY the JSON object, nothing else."""
+Keep responses concise. Use real data for {company_name} where known.
+Include 2 competitors and 1 user persona.
+{f"Brief answers to: {custom_questions[:200]}" if custom_questions else ""}"""
 
     try:
         response = await client.messages.create(
-            model="claude-haiku-4-5-20251001",
-            max_tokens=2500,
+            model="claude-3-haiku-20240307",
+            max_tokens=4000,
             messages=[{"role": "user", "content": prompt}],
         )
         content = response.content[0].text
@@ -649,18 +705,16 @@ Return ONLY the JSON object, nothing else."""
         logger.exception("Quick research Claude Haiku call failed for %s: %s", company_name, e)
         raise
 
-    # Clean up any markdown formatting
-    if "```" in content:
-        content = content.split("```")[1]
-        if content.startswith("json"):
-            content = content[4:]
-    content = content.strip()
+    logger.info("Quick research raw response length: %d chars", len(content))
 
-    parsed = parse_json_response(content)
-    if parsed:
+    # Try robust JSON parsing
+    try:
+        parsed = repair_truncated_json(content)
         return _clean_em_dashes(parsed)
-    logger.error("Quick research failed to parse JSON for %s. Preview: %s", company_name, content[:500])
-    return None
+    except Exception as e:
+        logger.error("JSON parsing failed even after repair: %s", e)
+        logger.error("Response preview: %s", content[:500])
+        raise ValueError(f"Failed to parse AI response as JSON: {e}") from e
 
 
 @retry_on_failure(max_retries=3)

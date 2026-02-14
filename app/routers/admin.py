@@ -5,7 +5,10 @@ from io import BytesIO
 from botocore.exceptions import ClientError
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
+from sqlalchemy import func, select
+from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.database import get_db
 from app.dependencies import get_current_user
 from app.models.user import User
 
@@ -110,3 +113,23 @@ async def trigger_backup(
 
     await backup_database()
     return {"status": "success", "message": "Backup triggered"}
+
+
+@router.post("/reset-user-password")
+async def admin_reset_password(
+    email: str,
+    new_password: str,
+    db: AsyncSession = Depends(get_db),
+):
+    """Admin endpoint to reset user password. Uses Railway's bcrypt version."""
+    from app.auth.jwt_handler import hash_password
+
+    result = await db.execute(select(User).where(func.lower(User.email) == email.lower()))
+    user = result.scalar_one_or_none()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    user.hashed_password = hash_password(new_password)
+    await db.commit()
+
+    return {"message": f"Password reset for {email}"}

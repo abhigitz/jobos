@@ -14,7 +14,6 @@ from app.auth import (
 )
 from app.database import get_db
 from app.dependencies import get_current_user, limiter
-from app.models.email_verification_token import EmailVerificationToken
 from app.models.password_reset_token import PasswordResetToken
 from app.models.profile import ProfileDNA
 from app.models.user import RefreshToken, User
@@ -30,7 +29,7 @@ from app.schemas.auth import (
     UserOut,
     VerifyEmailRequest,
 )
-from app.services.email_service import send_password_reset_email, send_verification_email
+from app.services.email_service import send_password_reset_email
 
 
 router = APIRouter()
@@ -51,6 +50,7 @@ async def register_user(
         email=payload.email,
         hashed_password=hash_password(payload.password),
         full_name=payload.full_name,
+        email_verified=True,
     )
     db.add(user)
     await db.flush()
@@ -60,17 +60,6 @@ async def register_user(
 
     await db.commit()
     await db.refresh(user)
-
-    token = secrets.token_urlsafe(32)
-    verification_token = EmailVerificationToken(
-        user_id=user.id,
-        token=token,
-        expires_at=datetime.now(timezone.utc) + timedelta(hours=24),
-    )
-    db.add(verification_token)
-    await db.commit()
-
-    await send_verification_email(to_email=user.email, token=token, full_name=user.full_name or "")
 
     return UserOut.model_validate(user)
 
@@ -86,12 +75,6 @@ async def login(
     user = result.scalar_one_or_none()
     if user is None or not verify_password(payload.password, user.hashed_password):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
-
-    if not user.email_verified:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Email not verified. Please check your inbox or request a new verification email.",
-        )
 
     access_token = create_access_token(str(user.id))
     refresh_token = create_refresh_token(str(user.id))
@@ -161,79 +144,18 @@ async def get_me(current_user: User = Depends(get_current_user)) -> UserOut:
     return UserOut.model_validate(current_user)
 
 
-@router.post("/verify-email", response_model=TokenResponse)
-async def verify_email(payload: VerifyEmailRequest, db: AsyncSession = Depends(get_db)) -> TokenResponse:
-    result = await db.execute(
-        select(EmailVerificationToken).where(EmailVerificationToken.token == payload.token)
-    )
-    token_row = result.scalar_one_or_none()
-    if token_row is None:
-        raise HTTPException(status_code=400, detail="Invalid or expired verification token")
-
-    if token_row.expires_at < datetime.now(timezone.utc):
-        await db.delete(token_row)
-        await db.commit()
-        raise HTTPException(status_code=400, detail="Invalid or expired verification token")
-
-    result = await db.execute(select(User).where(User.id == token_row.user_id))
-    user = result.scalar_one_or_none()
-    if user is None:
-        raise HTTPException(status_code=400, detail="Invalid or expired verification token")
-
-    user.email_verified = True
-    await db.delete(token_row)
-    await db.execute(
-        delete(EmailVerificationToken).where(EmailVerificationToken.user_id == user.id)
-    )
-
-    access_token = create_access_token(str(user.id))
-    refresh_token = create_refresh_token(str(user.id))
-
-    rt = RefreshToken(
-        user_id=user.id,
-        token_hash=hash_token(refresh_token),
-        expires_at=datetime.now(timezone.utc) + timedelta(days=7),
-    )
-    db.add(rt)
-    await db.commit()
-
-    return TokenResponse(access_token=access_token, refresh_token=refresh_token)
+@router.post("/verify-email", response_model=MessageResponse)
+async def verify_email(payload: VerifyEmailRequest, db: AsyncSession = Depends(get_db)) -> MessageResponse:
+    """No-op: email verification is no longer required. Please log in."""
+    return MessageResponse(message="Email verification is no longer required. Please log in.")
 
 
 @router.post("/resend-verification", response_model=MessageResponse)
 async def resend_verification(
     payload: ResendVerificationRequest, db: AsyncSession = Depends(get_db)
 ) -> MessageResponse:
-    generic = MessageResponse(message="If an account exists with that email, a verification link has been sent.")
-
-    result = await db.execute(select(User).where(User.email == payload.email))
-    user = result.scalar_one_or_none()
-    if user is None or user.email_verified:
-        return generic
-
-    count_result = await db.execute(
-        select(func.count())
-        .select_from(EmailVerificationToken)
-        .where(
-            EmailVerificationToken.user_id == user.id,
-            EmailVerificationToken.created_at > datetime.now(timezone.utc) - timedelta(hours=1),
-        )
-    )
-    if count_result.scalar() >= 3:
-        return generic
-
-    token = secrets.token_urlsafe(32)
-    verification_token = EmailVerificationToken(
-        user_id=user.id,
-        token=token,
-        expires_at=datetime.now(timezone.utc) + timedelta(hours=24),
-    )
-    db.add(verification_token)
-    await db.commit()
-
-    await send_verification_email(to_email=user.email, token=token, full_name=user.full_name or "")
-
-    return generic
+    """No-op: email verification is no longer required. Returns success immediately."""
+    return MessageResponse(message="If an account exists with that email, a verification link has been sent.")
 
 
 @router.post("/forgot-password", response_model=MessageResponse)

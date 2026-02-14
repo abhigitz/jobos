@@ -1,4 +1,7 @@
 """Pytest configuration and fixtures for JobOS tests."""
+# NOTE: DB-dependent tests require PostgreSQL. SQLite doesn't support ARRAY type.
+# To run full test suite, set TEST_DATABASE_URL to a PostgreSQL connection string.
+
 import asyncio
 import os
 from typing import AsyncGenerator, Generator

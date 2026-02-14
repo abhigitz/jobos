@@ -11,13 +11,23 @@ from app.config import get_settings
 # bcrypt with 12 rounds (OWASP recommended minimum)
 BCRYPT_ROUNDS = 12
 
+# bcrypt has a 72-byte limit (Blowfish). bcrypt 5.0+ raises ValueError for longer passwords.
+# Truncate to match bcrypt 4.x behavior and ensure compatibility across versions.
+BCRYPT_MAX_PASSWORD_BYTES = 72
+
+
+def _password_bytes(password: str) -> bytes:
+    """Encode password to bytes, truncating to 72 bytes for bcrypt compatibility."""
+    b = password.encode("utf-8")
+    return b[:BCRYPT_MAX_PASSWORD_BYTES] if len(b) > BCRYPT_MAX_PASSWORD_BYTES else b
+
 
 def hash_password(password: str) -> str:
-    return bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt(rounds=BCRYPT_ROUNDS)).decode("utf-8")
+    return bcrypt.hashpw(_password_bytes(password), bcrypt.gensalt(rounds=BCRYPT_ROUNDS)).decode("utf-8")
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
-    return bcrypt.checkpw(plain_password.encode("utf-8"), hashed_password.encode("utf-8"))
+    return bcrypt.checkpw(_password_bytes(plain_password), hashed_password.encode("utf-8"))
 
 
 def hash_token(token: str) -> str:

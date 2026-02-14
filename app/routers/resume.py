@@ -4,6 +4,7 @@ import logging
 import os
 import tempfile
 from pathlib import Path
+from typing import Optional
 from uuid import UUID
 
 import fitz
@@ -71,8 +72,8 @@ def _extract_text_from_pdf(pdf_bytes: bytes) -> str:
 
 @router.post("/upload")
 async def upload_resume(
-    file: UploadFile | None = File(None),
-    resume: UploadFile | None = File(None),
+    file: Optional[UploadFile] = File(None),
+    resume: Optional[UploadFile] = File(None),
     db: AsyncSession = Depends(get_db),
     current_user=Depends(get_current_user),
 ):

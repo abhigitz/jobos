@@ -1,5 +1,6 @@
 import secrets
 from datetime import datetime, timedelta, timezone
+from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy import delete, func, select
@@ -114,7 +115,7 @@ async def refresh_token_endpoint(
     # Find a matching refresh token record for this raw token
     result_tokens = await db.execute(select(RefreshToken).where(RefreshToken.user_id == user.id))
     tokens = result_tokens.scalars().all()
-    matched: RefreshToken | None = None
+    matched: Optional[RefreshToken] = None
     for rt in tokens:
         if hash_token(token) == rt.token_hash:
             matched = rt

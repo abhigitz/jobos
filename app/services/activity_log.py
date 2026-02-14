@@ -1,3 +1,4 @@
+from typing import Optional
 from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -10,8 +11,8 @@ async def log_activity(
     user_id: UUID,
     action_type: str,
     description: str,
-    related_job_id: UUID | None = None,
-    related_contact_id: UUID | None = None,
+    related_job_id: Optional[UUID] = None,
+    related_contact_id: Optional[UUID] = None,
 ) -> None:
     entry = ActivityLog(
         user_id=user_id,

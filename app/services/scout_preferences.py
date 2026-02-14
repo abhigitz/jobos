@@ -17,7 +17,7 @@ from app.models.scout import ScoutedJob, UserScoutPreferences, UserScoutedJob
 DEFAULT_EXCLUDED_INDUSTRIES = ["Food Delivery"]
 
 
-def _parse_min_salary_from_range(salary_range: str | None) -> int | None:
+def _parse_min_salary_from_range(salary_range: Optional[str]) -> Optional[int]:
     """Parse min salary in INR from strings like '90 LPA', '50-80 Lakh'."""
     if not salary_range or not isinstance(salary_range, str):
         return None
@@ -45,7 +45,7 @@ def _parse_min_salary_from_range(salary_range: str | None) -> int | None:
     return None
 
 
-def _extract_title_words(title: str | None) -> list[str]:
+def _extract_title_words(title: Optional[str]) -> list[str]:
     """Extract meaningful words from job title for penalty learning."""
     if not title:
         return []

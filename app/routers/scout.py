@@ -1,6 +1,7 @@
 """Scout API endpoints: job scouting preferences, scouted jobs, and legacy scout results."""
 import logging
 from datetime import datetime, timezone
+from typing import Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -84,7 +85,7 @@ async def sync_preferences_from_profile_endpoint(
 
 @router.get("/jobs")
 async def get_scouted_jobs(
-    status: str | None = Query(None, description="Filter: new, viewed, saved, dismissed"),
+    status: Optional[str] = Query(None, description="Filter: new, viewed, saved, dismissed"),
     min_score: int = Query(30, ge=0, description="Minimum relevance score"),
     limit: int = Query(20, ge=1, le=100),
     offset: int = Query(0, ge=0),
@@ -323,7 +324,7 @@ async def get_scout_stats(
 
 @router.get("/results", response_model=ScoutResultsPage)
 async def list_scout_results(
-    status: str | None = Query(None, description="Filter by status: new, reviewed, promoted, dismissed"),
+    status: Optional[str] = Query(None, description="Filter by status: new, reviewed, promoted, dismissed"),
     page: int = Query(1, ge=1),
     per_page: int = Query(20, ge=1, le=100),
     db: AsyncSession = Depends(get_db),

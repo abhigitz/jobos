@@ -1,11 +1,12 @@
 import json
-import re
 import logging
+import re
+from typing import Optional
 
 logger = logging.getLogger(__name__)
 
 
-def parse_json_response(raw_text: str | None) -> dict | None:
+def parse_json_response(raw_text: Optional[str]) -> Optional[dict]:
     """Parse Claude's JSON response with fallbacks for markdown wrapping."""
     if not raw_text:
         return None

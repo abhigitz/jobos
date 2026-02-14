@@ -1,3 +1,5 @@
+from typing import Optional
+
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Request
 from sqlalchemy import func, select
 from sqlalchemy.exc import ProgrammingError
@@ -18,7 +20,7 @@ router = APIRouter()
 
 @router.get("", response_model=list[CompanyOut])
 async def list_companies(
-    lane: int | None = None,
+    lane: Optional[int] = None,
     db: AsyncSession = Depends(get_db),
     current_user=Depends(get_current_user),
 ):

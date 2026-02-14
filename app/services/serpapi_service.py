@@ -5,7 +5,7 @@ from __future__ import annotations
 import hashlib
 import re
 from datetime import datetime, timedelta, timezone
-from typing import Any
+from typing import Any, List, Optional, Tuple
 
 import httpx
 
@@ -74,7 +74,7 @@ def normalize_title(title: str) -> str:
     return re.sub(r"\s+", " ", s).strip()
 
 
-def extract_city(location: str) -> str | None:
+def extract_city(location: str) -> Optional[str]:
     """Get first part before comma from location string."""
     if not location or not isinstance(location, str):
         return None
@@ -92,7 +92,7 @@ def generate_dedup_hash(company: str, title: str, location: str) -> str:
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
 
-def parse_posted_date(date_str: str) -> datetime | None:
+def parse_posted_date(date_str: str) -> Optional[datetime]:
     """Convert relative date strings like '2 days ago', '1 week ago' to datetime."""
     if not date_str or not isinstance(date_str, str):
         return None
@@ -131,7 +131,7 @@ def parse_posted_date(date_str: str) -> datetime | None:
     return None
 
 
-def parse_salary(salary_str: str) -> tuple[int | None, int | None, bool]:
+def parse_salary(salary_str: str) -> Tuple[Optional[int], Optional[int], bool]:
     """
     Extract min/max salary in INR from string. Returns (min, max, is_estimated).
     Detects 'estimated', 'approx', '~' etc. for is_estimated.
@@ -186,7 +186,7 @@ class SerpAPIClient:
     BASE_URL = "https://serpapi.com/search"
     ENGINE = "google_jobs"
 
-    def __init__(self, api_key: str | None = None):
+    def __init__(self, api_key: Optional[str] = None):
         settings = get_settings()
         self.api_key = api_key or settings.serpapi_key
 
@@ -253,7 +253,7 @@ class SerpAPIClient:
 
         return all_jobs[:num_results]
 
-    def _parse_job(self, raw: dict[str, Any], search_query: str) -> dict[str, Any] | None:
+    def _parse_job(self, raw: dict[str, Any], search_query: str) -> Optional[dict]:
         """Convert a single SerpAPI job result to scouted_jobs schema."""
         title = raw.get("title") or ""
         company_name = raw.get("company_name") or ""
@@ -333,8 +333,8 @@ class SerpAPIClient:
 
 
 async def fetch_jobs_from_serpapi(
-    templates: list[str] | None = None,
-    locations: list[str] | None = None,
+    templates: Optional[List[str]] = None,
+    locations: Optional[List[str]] = None,
     num_results_per_query: int = 10,
 ) -> list[dict[str, Any]]:
     """

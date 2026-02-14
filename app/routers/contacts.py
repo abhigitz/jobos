@@ -26,8 +26,8 @@ class OutreachAction(BaseModel):
 
 @router.get("", response_model=list[ContactOut])
 async def list_contacts(
-    company: str | None = None,
-    referral_status: str | None = None,
+    company: Optional[str] = None,
+    referral_status: Optional[str] = None,
     db: AsyncSession = Depends(get_db),
     current_user=Depends(get_current_user),
 ):

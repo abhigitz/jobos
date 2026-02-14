@@ -1,3 +1,4 @@
+from typing import Optional
 from uuid import UUID
 
 from pydantic import BaseModel, EmailStr, Field, field_validator
@@ -44,10 +45,10 @@ class TokenResponse(BaseModel):
 class UserOut(BaseModel):
     id: UUID
     email: str
-    full_name: str | None
+    full_name: Optional[str] = None
     is_active: bool
     onboarding_completed: bool
-    telegram_chat_id: int | None
+    telegram_chat_id: Optional[int] = None
     email_verified: bool
 
     class Config:

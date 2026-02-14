@@ -69,9 +69,9 @@ async def list_jobs(
     current_user=Depends(get_current_user),
     page: int = 1,
     per_page: int = 20,
-    status: str | None = None,
-    company_name: str | None = None,
-    source_portal: str | None = None,
+    status: Optional[str] = None,
+    company_name: Optional[str] = None,
+    source_portal: Optional[str] = None,
     sort: str = Query("-created_at"),
 ):
     base_query = select(Job).where(Job.user_id == current_user.id, Job.is_deleted.is_(False))

@@ -47,7 +47,7 @@ class ScoreResult:
 # --- Helper functions ---
 
 
-def normalize_for_matching(text: str | None) -> str:
+def normalize_for_matching(text: Optional[str]) -> str:
     """Lowercase, remove punctuation, normalize whitespace."""
     if not text or not isinstance(text, str):
         return ""
@@ -56,7 +56,7 @@ def normalize_for_matching(text: str | None) -> str:
     return re.sub(r"\s+", " ", s).strip()
 
 
-def extract_title_keywords(title: str | None) -> list[str]:
+def extract_title_keywords(title: Optional[str]) -> list[str]:
     """Split title into meaningful words (exclude very short/common words)."""
     if not title:
         return []
@@ -67,7 +67,7 @@ def extract_title_keywords(title: str | None) -> list[str]:
     return words
 
 
-def check_keyword_overlap(text: str | None, keywords: list[str]) -> int:
+def check_keyword_overlap(text: Optional[str], keywords: list[str]) -> int:
     """Count how many keywords appear in text (case-insensitive)."""
     if not text or not keywords:
         return 0
@@ -85,7 +85,7 @@ def check_keyword_overlap(text: str | None, keywords: list[str]) -> int:
     return count
 
 
-def _parse_min_salary_from_range(salary_range: str | None) -> int | None:
+def _parse_min_salary_from_range(salary_range: Optional[str]) -> Optional[int]:
     """Parse min salary in INR from strings like '90 LPA', '50-80 Lakh'."""
     if not salary_range or not isinstance(salary_range, str):
         return None
@@ -108,14 +108,14 @@ def _parse_min_salary_from_range(salary_range: str | None) -> int | None:
     return None
 
 
-def _get_company_id(job: ScoutedJob, company: Company | None) -> uuid.UUID | None:
+def _get_company_id(job: ScoutedJob, company: Optional[Company]) -> Optional[uuid.UUID]:
     """Get company ID from job's matched_company_id or passed company."""
     if company:
         return company.id
     return job.matched_company_id if hasattr(job, "matched_company_id") else None
 
 
-def _get_job_salary_min(job: ScoutedJob) -> int | None:
+def _get_job_salary_min(job: ScoutedJob) -> Optional[int]:
     """Get effective min salary from job (salary_min or salary_max for single-value)."""
     if hasattr(job, "salary_min") and job.salary_min is not None:
         return job.salary_min
@@ -124,14 +124,14 @@ def _get_job_salary_min(job: ScoutedJob) -> int | None:
     return None
 
 
-def _get_job_posted_date(job: ScoutedJob) -> date | None:
+def _get_job_posted_date(job: ScoutedJob) -> Optional[date]:
     """Get posted date from job."""
     if hasattr(job, "posted_date") and job.posted_date is not None:
         return job.posted_date
     return None
 
 
-def _days_ago(posted: date | None) -> int | None:
+def _days_ago(posted: Optional[date]) -> Optional[int]:
     """Days since posted date. None if no date."""
     if not posted:
         return None
@@ -145,7 +145,7 @@ def _days_ago(posted: date | None) -> int | None:
 def score_job(
     job: ScoutedJob,
     prefs: UserScoutPreferences,
-    company: Company | None = None,
+    company: Optional[Company] = None,
 ) -> ScoreResult:
     """
     Score a scouted job against user preferences (0-100 points).

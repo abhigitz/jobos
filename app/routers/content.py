@@ -29,9 +29,9 @@ class GenerateBatchRequest(BaseModel):
 
 @router.get("/calendar", response_model=list[ContentOut])
 async def get_calendar(
-    start_date: date | None = None,
-    end_date: date | None = None,
-    status: str | None = None,
+    start_date: Optional[date] = None,
+    end_date: Optional[date] = None,
+    status: Optional[str] = None,
     db: AsyncSession = Depends(get_db),
     current_user=Depends(get_current_user),
 ):

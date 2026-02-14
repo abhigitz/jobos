@@ -1,4 +1,6 @@
 from functools import lru_cache
+from typing import Dict, List, Optional, Union
+
 from pydantic_settings import BaseSettings
 
 
@@ -25,8 +27,8 @@ class Settings(BaseSettings):
     serpapi_key: str = ""
     adzuna_app_id: str = ""
     adzuna_api_key: str = ""
-    sentry_dsn: str | None = None
-    redis_url: str | None = None
+    sentry_dsn: Optional[str] = None
+    redis_url: Optional[str] = None
     environment: str = "production"
 
     # AI Model Configuration

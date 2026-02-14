@@ -2,7 +2,7 @@ import asyncio
 import json
 import logging
 from functools import wraps
-from typing import Any
+from typing import Any, Dict, List, Optional
 
 import anthropic
 from anthropic import AsyncAnthropic
@@ -87,7 +87,7 @@ async def call_claude(prompt: str, max_tokens: int = 2000, task_type: str = "def
 
 
 @retry_on_failure(max_retries=3)
-async def analyze_jd(jd_text: str, profile: dict[str, Any]) -> dict | None:
+async def analyze_jd(jd_text: str, profile: dict[str, Any]) -> Optional[dict]:
     level = profile.get("experience_level", "Mid")
     level_hint = LEVEL_CONTEXT.get(level, LEVEL_CONTEXT["Mid"])
 
@@ -143,7 +143,7 @@ RULES:
 
 
 @retry_on_failure(max_retries=3)
-async def deep_resume_analysis(jd_text: str, resume_text: str, profile: dict[str, Any]) -> dict | None:
+async def deep_resume_analysis(jd_text: str, resume_text: str, profile: dict[str, Any]) -> Optional[dict]:
     """Deep resume vs JD analysis with specific rewrite suggestions."""
     level = profile.get("experience_level", "Mid")
     level_hint = LEVEL_CONTEXT.get(level, LEVEL_CONTEXT["Mid"])
@@ -196,7 +196,7 @@ RULES:
 
 
 @retry_on_failure(max_retries=3)
-async def extract_profile(resume_text: str) -> dict | None:
+async def extract_profile(resume_text: str) -> Optional[dict]:
     prompt = f"""Extract a structured professional profile from this resume/text.
 
 TEXT:
@@ -224,7 +224,7 @@ Return ONLY valid JSON:
 
 
 @retry_on_failure(max_retries=3)
-async def generate_content_draft(topic: str, category: str, profile: dict[str, Any]) -> str | None:
+async def generate_content_draft(topic: str, category: str, profile: dict[str, Any]) -> Optional[str]:
     prompt = f"""Write a 150-200 word LinkedIn post about this topic.
 
 TOPIC: {topic}
@@ -241,7 +241,7 @@ Return ONLY the post text, nothing else."""
 
 
 @retry_on_failure(max_retries=3)
-async def generate_single_post(topic: str, content_type: str, profile: Any) -> str | None:
+async def generate_single_post(topic: str, content_type: str, profile: Any) -> Optional[str]:
     """Generate a single LinkedIn post for shuffle/regeneration."""
     prompt = f"""Write a LinkedIn post about: {topic}
 
@@ -261,7 +261,7 @@ Return ONLY the post text, no preamble."""
 
 
 @retry_on_failure(max_retries=3)
-async def generate_company_deep_dive(company_name: str, sector: str | None, profile: dict[str, Any]) -> str | None:
+async def generate_company_deep_dive(company_name: str, sector: Optional[str], profile: dict[str, Any]) -> Optional[str]:
     prompt = f"""Research and create a briefing on {company_name} ({sector}) for a job candidate.
 
 CANDIDATE TARGETING: {profile.get('target_roles', [])}
@@ -282,8 +282,8 @@ Return as structured text with clear headers."""
 
 @retry_on_failure(max_retries=3)
 async def research_company_structured(
-    company_name: str, sector: str | None, profile: dict[str, Any]
-) -> dict | None:
+    company_name: str, sector: Optional[str], profile: dict[str, Any]
+) -> Optional[dict]:
     """Research company and return structured JSON for DB population."""
     sector_hint = f" ({sector})" if sector else ""
     prompt = f"""Research {company_name}{sector_hint} and create a briefing for a job candidate.
@@ -324,7 +324,7 @@ RULES:
 
 
 @retry_on_failure(max_retries=3)
-async def generate_morning_briefing(data: dict[str, Any]) -> str | None:
+async def generate_morning_briefing(data: dict[str, Any]) -> Optional[str]:
     prompt = f"""Generate a morning briefing for a job seeker based on this data:
 
 {json.dumps(data, indent=2, default=str)}
@@ -347,7 +347,7 @@ Keep it concise. Use bullet points. Under 800 words."""
 
 
 @retry_on_failure(max_retries=3)
-async def analyze_jd_patterns(jd_texts: list[str], resume_keywords: list[str]) -> dict | None:
+async def analyze_jd_patterns(jd_texts: list[str], resume_keywords: list[str]) -> Optional[dict]:
     prompt = f"""Analyze these {len(jd_texts)} job descriptions that scored 7+ fit.
 
 JOB DESCRIPTIONS:
@@ -383,7 +383,7 @@ async def generate_interview_prep(
     jd_text: str,
     company_intel: str,
     profile: dict[str, Any],
-) -> str | None:
+) -> Optional[str]:
     prompt = f"""Generate a comprehensive interview preparation document.
 
 COMPANY: {company_name}
@@ -431,7 +431,7 @@ Be specific. Use real numbers. No generic filler."""
 
 
 @retry_on_failure(max_retries=3)
-async def generate_market_intel(company_names: list[str]) -> str | None:
+async def generate_market_intel(company_names: list[str]) -> Optional[str]:
     prompt = f"""You are a market intelligence analyst for a job seeker targeting 
 B2C consumer tech companies in Bangalore, India.
 
@@ -457,12 +457,12 @@ Mark each company as 🟢 (actively hiring), 🟡 (stable), or 🔴 (freezing/la
 async def generate_linkedin_post(
     topic_title: str,
     category: str,
-    angle: str | None,
+    angle: Optional[str],
     profile: dict[str, Any],
     stories: list,
     avoid_specific_numbers: bool = True,
-    instruction: str | None = None,
-) -> str | None:
+    instruction: Optional[str] = None,
+) -> Optional[str]:
     """Generate a LinkedIn post with humanization rules."""
 
     stories_context = ""
@@ -533,10 +533,10 @@ Write the post now. Return ONLY the post text, nothing else."""
 @retry_on_failure(max_retries=3)
 async def generate_content_studio_topics(
     profile: dict[str, Any],
-    categories: list[str] | None = None,
+    categories: Optional[List[str]] = None,
     avoid_specific_numbers: bool = True,
-    recent_topics: list[str] | None = None,
-) -> list[dict[str, Any]] | None:
+    recent_topics: Optional[List[str]] = None,
+) -> Optional[List[Dict[str, Any]]]:
     """Generate Content Studio v2 topics with angle and suggested_creative."""
     cats = categories or ["Growth", "Career", "Leadership", "GenAI", "Industry", "Personal"]
     cats_str = "|".join(cats)
@@ -598,7 +598,7 @@ Return ONLY valid JSON:
 
 
 @retry_on_failure(max_retries=3)
-async def generate_content_topics(profile: dict[str, Any]) -> list[dict[str, str]] | None:
+async def generate_content_topics(profile: dict[str, Any]) -> Optional[List[Dict[str, str]]]:
     prompt = f"""Generate 7 LinkedIn post topics for this profile.
 
 PROFILE:
@@ -619,7 +619,7 @@ Return ONLY valid JSON:
 
 
 @retry_on_failure(max_retries=3)
-async def generate_midday_check(data: dict[str, Any]) -> str | None:
+async def generate_midday_check(data: dict[str, Any]) -> Optional[str]:
     prompt = f"""Generate a mid-day accountability check for a job seeker.
 
 Recent activity data:
@@ -633,7 +633,7 @@ Keep it under 200 words."""
 
 
 @retry_on_failure(max_retries=3)
-async def generate_weekly_review(data: dict[str, Any]) -> str | None:
+async def generate_weekly_review(data: dict[str, Any]) -> Optional[str]:
     prompt = f"""Generate a weekly review for a job seeker.
 
 This week's data:

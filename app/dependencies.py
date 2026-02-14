@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from typing import Optional
 from uuid import UUID
 
 from fastapi import Depends, HTTPException, Request, status
@@ -67,7 +68,7 @@ async def get_current_user(
 
 async def get_current_user_or_n8n(
     request: Request,
-    credentials: HTTPAuthorizationCredentials | None = Depends(security_optional),
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(security_optional),
     db: AsyncSession = Depends(get_db),
 ) -> User:
     """Accept JWT token OR X-N8N-Secret header."""

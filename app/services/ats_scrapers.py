@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 from datetime import datetime, timezone
-from typing import Any
+from typing import Any, Optional
 
 import httpx
 from bs4 import BeautifulSoup
@@ -50,7 +50,7 @@ def _company_name_from_slug(slug: str) -> str:
     return COMPANY_SLUG_TO_NAME.get(slug.lower(), slug.replace("-", " ").title())
 
 
-def _strip_html(html: str | None) -> str | None:
+def _strip_html(html: Optional[str]) -> Optional[str]:
     """Strip HTML tags from content; return None if empty."""
     if not html or not html.strip():
         return None

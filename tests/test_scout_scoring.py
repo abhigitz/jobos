@@ -1,6 +1,7 @@
 """Scout scoring unit tests."""
 from dataclasses import dataclass
 from datetime import date
+from typing import List, Optional
 
 import pytest
 
@@ -17,28 +18,28 @@ class MockJob:
     city: str = ""
     description: str = ""
     matched_company_id: object = None
-    posted_date: date | None = None
-    salary_min: int | None = None
-    salary_max: int | None = None
+    posted_date: Optional[date] = None
+    salary_min: Optional[int] = None
+    salary_max: Optional[int] = None
 
 
 @dataclass
 class MockPreferences:
     """Minimal preferences object for scoring tests."""
 
-    target_roles: list | None = None
-    role_keywords: list | None = None
-    target_locations: list | None = None
-    target_company_ids: list | None = None
-    target_industries: list | None = None
-    excluded_company_ids: list | None = None
-    excluded_industries: list | None = None
-    min_salary: int | None = None
-    company_stages: list | None = None
+    target_roles: Optional[List] = None
+    role_keywords: Optional[List] = None
+    target_locations: Optional[List] = None
+    target_company_ids: Optional[List] = None
+    target_industries: Optional[List] = None
+    excluded_company_ids: Optional[List] = None
+    excluded_industries: Optional[List] = None
+    min_salary: Optional[int] = None
+    company_stages: Optional[List] = None
     location_flexibility: str = "preferred"
     salary_flexibility: str = "flexible"
-    learned_boosts: dict | None = None
-    learned_penalties: dict | None = None
+    learned_boosts: Optional[dict] = None
+    learned_penalties: Optional[dict] = None
 
     def __post_init__(self):
         if self.target_roles is None:

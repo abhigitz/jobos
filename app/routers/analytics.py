@@ -1,4 +1,5 @@
 from datetime import date, datetime, timedelta
+from typing import Dict, List, Optional
 
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy import func, select
@@ -21,7 +22,7 @@ from app.services.ai_service import generate_weekly_review
 router = APIRouter()
 
 
-def _compute_streak(logs_by_date: dict[date, object], today: date) -> int:
+def _compute_streak(logs_by_date: Dict[date, object], today: date) -> int:
     """Compute streak, excluding Sundays from breaking it."""
     streak = 0
     day_cursor = today
@@ -44,8 +45,8 @@ def _compute_streak(logs_by_date: dict[date, object], today: date) -> int:
 
 @router.get("/daily-log", response_model=list[DailyLogOut])
 async def get_daily_logs(
-    start_date: date | None = None,
-    end_date: date | None = None,
+    start_date: Optional[date] = None,
+    end_date: Optional[date] = None,
     db: AsyncSession = Depends(get_db),
     current_user=Depends(get_current_user),
 ) -> list[DailyLogOut]:
@@ -81,7 +82,7 @@ async def upsert_daily_log(
 
 @router.get("/weekly-review", response_model=list[WeeklyReviewOut])
 async def get_weekly_reviews(
-    week_number: int | None = None,
+    week_number: Optional[int] = None,
     db: AsyncSession = Depends(get_db),
     current_user=Depends(get_current_user),
 ) -> list[WeeklyReviewOut]:
@@ -274,7 +275,7 @@ async def get_energy_correlation(
         return {"note": "Log energy levels for 7+ days to see correlations.", "data": None}
 
     # Group by energy level
-    by_energy: dict[int, list] = {}
+    by_energy: Dict[int, list] = {}
     for log in logs:
         level = log.energy_level
         if level not in by_energy:

@@ -2,7 +2,7 @@
 import logging
 import uuid
 from datetime import datetime, timezone
-from typing import Any
+from typing import Any, List, Optional, Set
 
 import httpx
 from rapidfuzz import fuzz
@@ -81,7 +81,7 @@ async def _fetch_serper(queries: list[str], api_key: str) -> list[dict]:
     return [r for r in results if r is not None]
 
 
-def _normalize_serper(item: dict) -> dict | None:
+def _normalize_serper(item: dict) -> Optional[dict]:
     """Normalize a Serper organic result to common schema.
 
     Maps: title -> title (parses 'Role at Company' pattern), link -> source_url, snippet -> snippet.
@@ -153,7 +153,7 @@ async def _fetch_adzuna(queries: list[str], app_id: str, api_key: str) -> list[d
     return [r for r in results if r is not None]
 
 
-def _normalize_adzuna(item: dict) -> dict | None:
+def _normalize_adzuna(item: dict) -> Optional[dict]:
     """Normalize an Adzuna result to common schema.
 
     Field mapping verified against real Adzuna API responses.
@@ -198,7 +198,7 @@ def _deduplicate(
     items: list[dict],
     existing_urls: set[str],
     existing_titles: list[tuple[str, str]],
-    existing_adzuna_ids: set[str] | None = None,
+    existing_adzuna_ids: Optional[Set[str]] = None,
 ) -> list[dict]:
     """Remove duplicates by Adzuna ID, URL exact match, and title+company fuzzy match.
 
@@ -270,8 +270,8 @@ def _deduplicate(
 
 def _pre_filter(
     items: list[dict],
-    target_roles: list[str] | None,
-    target_locations: list[str] | None,
+    target_roles: Optional[List[str]],
+    target_locations: Optional[List[str]],
     excluded_companies: set[str],
 ) -> list[dict]:
     """Fast pre-filter before AI scoring. Removes obviously irrelevant jobs."""
@@ -414,7 +414,7 @@ async def _ai_score_all(items: list[dict], profile_summary: str) -> list[dict]:
 
 # -- Main Orchestrator ------------------------------------------------------
 
-async def run_scout(user_id: str | None = None) -> dict:
+async def run_scout(user_id: Optional[str] = None) -> dict:
     """Run the full scout pipeline: FETCH -> NORMALIZE -> DEDUP -> PRE-FILTER -> AI SCORE -> SAVE + NOTIFY.
 
     Args:

@@ -1,11 +1,11 @@
 """Pytest configuration and fixtures for JobOS tests."""
-import os
 import asyncio
+import os
 from typing import AsyncGenerator, Generator
 
 import pytest
-from httpx import AsyncClient, ASGITransport
-from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
+from httpx import ASGITransport, AsyncClient
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.pool import StaticPool
 
 # Set test env BEFORE any app imports
@@ -19,9 +19,11 @@ from app.config import get_settings
 
 get_settings.cache_clear()
 
-from app.main import app
+from app.auth import hash_password
 from app.database import get_db
+from app.main import app
 from app.models.base import Base
+from app.models.user import User
 
 # Import all models so Base.metadata has all tables
 import app.models  # noqa: F401
@@ -116,3 +118,13 @@ async def auth_headers(client: AsyncClient, db_session: AsyncSession) -> dict:
     token = response.json()["access_token"]
 
     return {"Authorization": f"Bearer {token}"}
+
+
+@pytest.fixture
+def test_user_data():
+    """Test user registration payload."""
+    return {
+        "email": "test@example.com",
+        "password": "TestPassword123!",
+        "full_name": "Test User",
+    }

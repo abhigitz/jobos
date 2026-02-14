@@ -1,4 +1,5 @@
 import hashlib
+import logging
 from datetime import datetime, timedelta, timezone
 from typing import Any, Optional
 
@@ -6,6 +7,8 @@ import bcrypt
 from jose import JWTError, jwt
 
 from app.config import get_settings
+
+logger = logging.getLogger(__name__)
 
 
 # bcrypt with 12 rounds (OWASP recommended minimum)
@@ -27,7 +30,21 @@ def hash_password(password: str) -> str:
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
-    return bcrypt.checkpw(_password_bytes(plain_password), hashed_password.encode("utf-8"))
+    """Verify password against bcrypt hash. Returns False on invalid hash format."""
+    if not hashed_password or not isinstance(hashed_password, str):
+        return False
+    # bcrypt hashes are 60 chars, start with $2a$, $2b$, or $2y$
+    if len(hashed_password) != 60 or not hashed_password.startswith(("$2a$", "$2b$", "$2y$")):
+        return False
+    try:
+        return bcrypt.checkpw(
+            _password_bytes(plain_password),
+            hashed_password.encode("utf-8"),
+        )
+    except (ValueError, TypeError) as e:
+        # Invalid salt / malformed hash - e.g. bcrypt 5.0 stricter validation, or passlib format
+        logger.warning("bcrypt.checkpw failed (hash may be incompatible): %s", e)
+        return False
 
 
 def hash_token(token: str) -> str:

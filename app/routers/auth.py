@@ -2,7 +2,6 @@ import logging
 import secrets
 import traceback
 from datetime import datetime, timedelta, timezone
-from pathlib import Path
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
@@ -184,35 +183,10 @@ async def login(
     **Response:** TokenResponse (access_token, refresh_token, token_type, expires_in)
     **Errors:** 401 (invalid credentials)
     """
-    # #region agent log
-    try:
-        _log_path = Path(__file__).resolve().parents[2] / ".cursor" / "debug.log"
-        _log_path.parent.mkdir(parents=True, exist_ok=True)
-        with open(_log_path, "a") as _f:
-            import json
-            _f.write(json.dumps({"id":"login_entry","timestamp":__import__("time").time()*1000,"location":"auth.py:login","message":"Login attempt","data":{"email":payload.email[:3]+"***"},"hypothesisId":"H1"})+"\n")
-    except Exception:
-        pass
-    # #endregion
     email = payload.email.lower().strip()
     result = await db.execute(select(User).where(func.lower(User.email) == email))
     user = result.scalar_one_or_none()
-    if user is None:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
-    # #region agent log
-    try:
-        _pw_ok = verify_password(payload.password, user.hashed_password)
-    except Exception as _verify_err:
-        try:
-            _lp = Path(__file__).resolve().parents[2] / ".cursor" / "debug.log"
-            with open(_lp, "a") as _f:
-                import json
-                _f.write(json.dumps({"id":"login_verify_err","timestamp":__import__("time").time()*1000,"location":"auth.py:verify_password","message":"verify_password raised","data":{"err":str(_verify_err),"type":type(_verify_err).__name__},"hypothesisId":"H2"})+"\n")
-        except Exception:
-            pass
-        raise
-    # #endregion
-    if not _pw_ok:
+    if user is None or not verify_password(payload.password, user.hashed_password):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
 
     access_token = create_access_token(str(user.id))

@@ -7,6 +7,7 @@ import asyncio
 import json
 import logging
 from datetime import datetime
+from typing import Optional
 
 import httpx
 
@@ -174,7 +175,7 @@ async def fetch_lever_jobs(
         }
 
 
-def _truncate(s: str | None, max_len: int = 28) -> str:
+def _truncate(s: Optional[str], max_len: int = 28) -> str:
     """Truncate string for table display."""
     if s is None:
         return ""

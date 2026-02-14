@@ -123,6 +123,22 @@ _cors_origins = [
     if o
 ]
 _cors_origins = list(dict.fromkeys(_cors_origins))  # dedupe preserving order
+_cors_origin_regex = __import__("re").compile(r"https://.*\.lovable\.app")
+
+
+def _add_cors_headers_to_response(response: JSONResponse, request: Request) -> JSONResponse:
+    """Add CORS headers to a response so browsers can read error bodies (e.g. 500)."""
+    origin = request.headers.get("origin")
+    if origin and (
+        origin in _cors_origins
+        or (_cors_origin_regex.fullmatch(origin) if _cors_origin_regex else False)
+    ):
+        response.headers["Access-Control-Allow-Origin"] = origin
+        response.headers["Vary"] = "Origin"
+    response.headers["Access-Control-Allow-Credentials"] = "true"
+    return response
+
+
 app.add_middleware(TrailingSlashMiddleware)
 app.add_middleware(
     CORSMiddleware,
@@ -245,10 +261,11 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
         request.url.path,
         errors,
     )
-    return JSONResponse(
+    resp = JSONResponse(
         status_code=422,
         content={"detail": errors, "message": message},
     )
+    return _add_cors_headers_to_response(resp, request)
 
 
 @app.exception_handler(Exception)
@@ -268,8 +285,10 @@ async def debug_unhandled_exception(request, exc):
         pass
     from starlette.responses import JSONResponse
     if settings.debug:
-        return JSONResponse(status_code=500, content={"detail": str(exc), "traceback": tb})
-    return JSONResponse(status_code=500, content={"detail": "Internal server error"})
+        resp = JSONResponse(status_code=500, content={"detail": str(exc), "traceback": tb})
+    else:
+        resp = JSONResponse(status_code=500, content={"detail": "Internal server error"})
+    return _add_cors_headers_to_response(resp, request)
 
 
 @app.get("/health", status_code=200)

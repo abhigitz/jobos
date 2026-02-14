@@ -235,12 +235,12 @@ api_v1.include_router(briefings_user.router, prefix="/briefings", tags=["Briefin
 api_v1.include_router(content_studio.router)
 api_v1.include_router(daily_logs.router, prefix="/daily-logs", tags=["Daily Logs"])
 api_v1.include_router(interviews.router, prefix="/interviews", tags=["Interviews"])
-api_v1.include_router(research.router)
 api_v1.include_router(scout.router, prefix="/scout", tags=["Scout"])
 api_v1.include_router(search.router)
 
 # Mount v1 router
 app.include_router(api_v1)
+app.include_router(research.router)
 
 
 @app.exception_handler(RequestValidationError)

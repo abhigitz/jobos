@@ -15,7 +15,7 @@ from app.services.ai_service import generate_company_deep_research
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/research", tags=["Research"])
+router = APIRouter(prefix="/api/v1/company-research", tags=["company-research"])
 
 
 async def _process_research_background(research_id: str, user_id: str) -> None:

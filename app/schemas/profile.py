@@ -15,6 +15,8 @@ class ProfileUpdate(BaseModel):
     experience_level: Optional[str] = None
     years_of_experience: Optional[int] = None
     job_search_type: Optional[str] = None
+    linkedin_url: Optional[str] = None
+    phone: Optional[str] = None
     achievements: Optional[list[dict]] = None
     resume_keywords: Optional[list[str]] = None
     education: Optional[list[dict]] = None
@@ -48,4 +50,6 @@ class ProfileOut(BaseModel):
     experience_level: Optional[str] = None
     years_of_experience: Optional[int] = None
     job_search_type: Optional[str] = None
+    linkedin_url: Optional[str] = None
+    phone: Optional[str] = None
     lane_labels: Optional[dict] = None

@@ -20,6 +20,11 @@ class RegisterRequest(BaseModel):
     password: str = Field(..., min_length=8, max_length=128)
     full_name: str = Field(..., max_length=255)
 
+    @field_validator('email')
+    @classmethod
+    def normalize_email(cls, v: str) -> str:
+        return v.lower().strip() if v else v
+
     @field_validator('password')
     @classmethod
     def password_strength(cls, v: str) -> str:
@@ -29,6 +34,11 @@ class RegisterRequest(BaseModel):
 class LoginRequest(BaseModel):
     email: str
     password: str
+
+    @field_validator('email')
+    @classmethod
+    def normalize_email(cls, v: str) -> str:
+        return v.lower().strip() if v else v
 
 
 class RefreshRequest(BaseModel):
@@ -62,9 +72,19 @@ class VerifyEmailRequest(BaseModel):
 class ResendVerificationRequest(BaseModel):
     email: str
 
+    @field_validator('email')
+    @classmethod
+    def normalize_email(cls, v: str) -> str:
+        return v.lower().strip() if v else v
+
 
 class ForgotPasswordRequest(BaseModel):
     email: str
+
+    @field_validator('email')
+    @classmethod
+    def normalize_email(cls, v: str) -> str:
+        return v.lower().strip() if v else v
 
 
 class ResetPasswordRequest(BaseModel):

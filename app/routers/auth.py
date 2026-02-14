@@ -1,9 +1,11 @@
+import logging
 import secrets
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy import delete, func, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth import (
@@ -32,6 +34,7 @@ from app.schemas.auth import (
 )
 from app.services.email_service import send_password_reset_email
 
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -43,26 +46,52 @@ async def register_user(
     payload: RegisterRequest,
     db: AsyncSession = Depends(get_db),
 ) -> UserOut:
-    existing = await db.execute(select(User).where(User.email == payload.email))
-    if existing.scalar_one_or_none() is not None:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Email already registered")
+    email = payload.email.lower().strip()
+    try:
+        existing = await db.execute(select(User).where(func.lower(User.email) == email))
+        if existing.scalar_one_or_none() is not None:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Email already registered")
 
-    user = User(
-        email=payload.email,
-        hashed_password=hash_password(payload.password),
-        full_name=payload.full_name,
-        email_verified=True,
-    )
-    db.add(user)
-    await db.flush()
+        user = User(
+            email=email,
+            hashed_password=hash_password(payload.password),
+            full_name=payload.full_name,
+            email_verified=True,
+        )
+        db.add(user)
+        await db.flush()
 
-    profile = ProfileDNA(user_id=user.id)
-    db.add(profile)
+        profile = ProfileDNA(user_id=user.id)
+        db.add(profile)
 
-    await db.commit()
-    await db.refresh(user)
+        await db.commit()
+        await db.refresh(user)
 
-    return UserOut.model_validate(user)
+        return UserOut.model_validate(user)
+    except HTTPException:
+        raise
+    except IntegrityError as e:
+        await db.rollback()
+        err_msg = str(getattr(e, "orig", e)).lower()
+        if "unique" in err_msg or "duplicate" in err_msg:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Email already registered")
+        logger.exception("Registration integrity error: %s", e)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Registration failed, please try again",
+        )
+    except ValueError as e:
+        await db.rollback()
+        if "email" in str(e).lower() or "invalid" in str(e).lower():
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid email format")
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    except Exception as e:
+        await db.rollback()
+        logger.exception("Registration failed: %s", e)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Registration failed, please try again",
+        )
 
 
 @router.post("/login", response_model=TokenResponse)
@@ -72,7 +101,8 @@ async def login(
     payload: LoginRequest,
     db: AsyncSession = Depends(get_db),
 ) -> TokenResponse:
-    result = await db.execute(select(User).where(User.email == payload.email))
+    email = payload.email.lower().strip()
+    result = await db.execute(select(User).where(func.lower(User.email) == email))
     user = result.scalar_one_or_none()
     if user is None or not verify_password(payload.password, user.hashed_password):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
@@ -168,7 +198,8 @@ async def forgot_password(
 ) -> MessageResponse:
     generic = MessageResponse(message="If an account exists with that email, a password reset link has been sent.")
 
-    result = await db.execute(select(User).where(User.email == payload.email))
+    email = payload.email.lower().strip()
+    result = await db.execute(select(User).where(func.lower(User.email) == email))
     user = result.scalar_one_or_none()
     if user is None:
         return generic

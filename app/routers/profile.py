@@ -90,6 +90,8 @@ CRITICAL RULES:
 Return ONLY valid JSON:
 {{
     "full_name": "Full Name from resume",
+    "linkedin_url": "LinkedIn profile URL if present in resume, else null",
+    "phone": "Phone number if present in resume, else null",
     "positioning_statement": "One sentence summary of their professional identity",
     "target_roles": ["Target role 1", "Target role 2"],
     "core_skills": ["skill1", "skill2", "skill3"],

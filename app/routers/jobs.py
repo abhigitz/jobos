@@ -38,6 +38,13 @@ from app.services.jd_extractor import extract_jd_from_url
 router = APIRouter()
 
 
+def _user_has_b2_preference(profile: ProfileDNA | None) -> bool:
+    """True if user has explicitly set B2C or B2B preference in job_search_type."""
+    if not profile or not profile.job_search_type:
+        return False
+    return profile.job_search_type.lower() in ("b2c", "b2b")
+
+
 # --- Pydantic schemas for new endpoints ---
 
 class InterviewCreate(BaseModel):
@@ -409,17 +416,29 @@ async def analyze_jd_endpoint(
     if analysis is None:
         raise HTTPException(status_code=503, detail="AI analysis temporarily unavailable")
 
-    # Replace cover letter signature placeholders with real values
+    # Replace cover letter signature placeholders with real values from profile, fallback to settings
     settings = get_settings()
     cover_letter = analysis.get("cover_letter_draft", "")
     if cover_letter:
         candidate_name = profile.full_name if profile and profile.full_name else "Your Name"
+        candidate_phone = (profile.phone if profile else None) or settings.owner_phone or ""
+        candidate_linkedin = (profile.linkedin_url if profile else None) or settings.owner_linkedin_url or ""
         cover_letter = cover_letter.replace("[CANDIDATE_NAME]", candidate_name)
-        cover_letter = cover_letter.replace("[CANDIDATE_PHONE]", settings.owner_phone or "")
-        cover_letter = cover_letter.replace("[CANDIDATE_LINKEDIN]", settings.owner_linkedin_url or "")
+        cover_letter = cover_letter.replace("[CANDIDATE_PHONE]", candidate_phone)
+        # Omit LinkedIn line if user has none; otherwise use profile/settings value
+        if candidate_linkedin:
+            cover_letter = cover_letter.replace("[CANDIDATE_LINKEDIN]", candidate_linkedin)
+        else:
+            # Remove placeholder and collapse extra newlines when omitting LinkedIn
+            cover_letter = cover_letter.replace("[CANDIDATE_LINKEDIN]", "").replace("\n\n\n", "\n\n")
         # Strip em dashes as safety net
         cover_letter = cover_letter.replace("\u2014", ", ").replace("\u2013", ", ")
         analysis["cover_letter_draft"] = cover_letter
+
+    # Only include B2C/B2B indicator if user has explicitly set preference (P1-5)
+    if not _user_has_b2_preference(profile):
+        analysis.pop("b2c_check", None)
+        analysis.pop("b2c_reason", None)
 
     return {
         "analysis": analysis,
@@ -442,6 +461,10 @@ async def save_from_analysis(
 
     company_name = payload.company_name
     role_title = payload.role_title
+
+    prof_res = await db.execute(select(ProfileDNA).where(ProfileDNA.user_id == current_user.id))
+    profile = prof_res.scalar_one_or_none()
+    has_b2_pref = _user_has_b2_preference(profile)
 
     # Check for existing job with same company + role (dedup)
     existing = await db.execute(
@@ -468,8 +491,8 @@ async def save_from_analysis(
         existing_job.cover_letter = payload.cover_letter
         existing_job.resume_suggestions = payload.resume_suggestions
         existing_job.interview_angle = payload.interview_angle
-        existing_job.b2c_check = payload.b2c_check
-        existing_job.b2c_reason = payload.b2c_reason
+        existing_job.b2c_check = payload.b2c_check if has_b2_pref else None
+        existing_job.b2c_reason = payload.b2c_reason if has_b2_pref else None
         existing_job.source_portal = payload.source_portal or "JD Analysis"
 
         # Update status if upgrading (Tracking -> Applied)
@@ -500,8 +523,8 @@ async def save_from_analysis(
             cover_letter=payload.cover_letter,
             resume_suggestions=payload.resume_suggestions,
             interview_angle=payload.interview_angle,
-            b2c_check=payload.b2c_check,
-            b2c_reason=payload.b2c_reason,
+            b2c_check=payload.b2c_check if has_b2_pref else None,
+            b2c_reason=payload.b2c_reason if has_b2_pref else None,
             source_portal=payload.source_portal or "JD Analysis",
             notes=[],
         )
@@ -863,14 +886,19 @@ async def reanalyze_job(
     if analysis is None:
         raise HTTPException(status_code=503, detail="AI analysis temporarily unavailable")
 
-    # Replace cover letter signature placeholders with real values
+    # Replace cover letter signature placeholders with real values from profile, fallback to settings
     settings = get_settings()
     cover_letter = analysis.get("cover_letter_draft") or analysis.get("cover_letter", "")
     if cover_letter:
         candidate_name = profile.full_name if profile and profile.full_name else "Your Name"
+        candidate_phone = (profile.phone if profile else None) or settings.owner_phone or ""
+        candidate_linkedin = (profile.linkedin_url if profile else None) or settings.owner_linkedin_url or ""
         cover_letter = cover_letter.replace("[CANDIDATE_NAME]", candidate_name)
-        cover_letter = cover_letter.replace("[CANDIDATE_PHONE]", settings.owner_phone or "")
-        cover_letter = cover_letter.replace("[CANDIDATE_LINKEDIN]", settings.owner_linkedin_url or "")
+        cover_letter = cover_letter.replace("[CANDIDATE_PHONE]", candidate_phone)
+        if candidate_linkedin:
+            cover_letter = cover_letter.replace("[CANDIDATE_LINKEDIN]", candidate_linkedin)
+        else:
+            cover_letter = cover_letter.replace("[CANDIDATE_LINKEDIN]", "").replace("\n\n\n", "\n\n")
         cover_letter = cover_letter.replace("\u2014", ", ").replace("\u2013", ", ")
 
     # Update job with new analysis
@@ -882,8 +910,13 @@ async def reanalyze_job(
     job.cover_letter = cover_letter
     job.resume_suggestions = analysis.get("resume_suggestions")
     job.interview_angle = analysis.get("interview_angle")
-    job.b2c_check = analysis.get("b2c_check")
-    job.b2c_reason = analysis.get("b2c_reason")
+    # Only set B2C/B2B fields if user has explicitly set preference (P1-5)
+    if _user_has_b2_preference(profile):
+        job.b2c_check = analysis.get("b2c_check")
+        job.b2c_reason = analysis.get("b2c_reason")
+    else:
+        job.b2c_check = None
+        job.b2c_reason = None
     job.updated_at = datetime.now(timezone.utc)
 
     await log_activity(

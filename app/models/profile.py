@@ -35,6 +35,8 @@ class ProfileDNA(Base, IDMixin, TimestampMixin):
     experience_level: Mapped[Optional[str]] = mapped_column(String(50))
     years_of_experience: Mapped[Optional[int]]
     job_search_type: Mapped[Optional[str]] = mapped_column(String(50))
+    linkedin_url: Mapped[Optional[str]] = mapped_column(String(1000))
+    phone: Mapped[Optional[str]] = mapped_column(String(50))
     lane_labels: Mapped[Optional[Dict]] = mapped_column(
         JSONBCompat(),
         default={

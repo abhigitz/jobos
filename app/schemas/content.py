@@ -2,7 +2,7 @@ from datetime import date
 from typing import Optional
 from uuid import UUID
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class ContentCreate(BaseModel):
@@ -29,11 +29,10 @@ class ContentUpdate(BaseModel):
 
 
 class ContentOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: UUID
     scheduled_date: date
     topic: Optional[str]
     category: Optional[str]
     status: str
-
-    class Config:
-        from_attributes = True

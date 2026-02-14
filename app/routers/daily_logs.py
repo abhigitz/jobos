@@ -2,7 +2,7 @@ from datetime import date, timedelta
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -51,6 +51,8 @@ class DailyLogUpdate(BaseModel):
 
 
 class DailyLogOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: str
     log_date: date
     jobs_applied: int
@@ -68,9 +70,6 @@ class DailyLogOut(BaseModel):
     key_win: Optional[str] = None
     tomorrow_priorities: Optional[str] = None
     notes: Optional[str] = None
-
-    class Config:
-        from_attributes = True
 
 
 def _log_to_out(log: DailyLog) -> DailyLogOut:

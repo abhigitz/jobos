@@ -1,10 +1,11 @@
 from functools import lru_cache
 from typing import Dict, List, Optional, Union
 
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
+    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
     database_url: str
     jwt_secret_key: str
     jwt_refresh_secret_key: str
@@ -35,11 +36,6 @@ class Settings(BaseSettings):
     ai_model_default: str = "claude-sonnet-4-20250514"
     ai_model_deep: str = "claude-sonnet-4-20250514"
     ai_model_content: str = "claude-sonnet-4-20250514"
-
-    class Config:
-        env_file = ".env"
-        env_file_encoding = "utf-8"
-        extra = "ignore"
 
 
 @lru_cache

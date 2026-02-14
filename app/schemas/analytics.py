@@ -2,7 +2,7 @@ from datetime import date, datetime
 from typing import Optional
 from uuid import UUID
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 
 class DailyLogIn(BaseModel):
@@ -22,6 +22,8 @@ class DailyLogIn(BaseModel):
 
 
 class DailyLogOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: UUID
     log_date: date
     jobs_applied: int
@@ -32,11 +34,10 @@ class DailyLogOut(BaseModel):
     referrals_asked: int
     naukri_updated: bool
 
-    class Config:
-        from_attributes = True
-
 
 class WeeklyReviewOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: UUID
     week_number: Optional[int]
     week_start: Optional[date]
@@ -49,9 +50,6 @@ class WeeklyReviewOut(BaseModel):
     interviews_scheduled: int
     response_rate: Optional[float]
     ai_analysis: Optional[str]
-
-    class Config:
-        from_attributes = True
 
 
 class DashboardOut(BaseModel):

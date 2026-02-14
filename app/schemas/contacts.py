@@ -2,7 +2,7 @@ from datetime import date
 from typing import Optional
 from uuid import UUID
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class ContactCreate(BaseModel):
@@ -32,6 +32,8 @@ class ContactUpdate(BaseModel):
 
 
 class ContactOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: UUID
     name: str
     company: Optional[str]
@@ -46,6 +48,3 @@ class ContactOut(BaseModel):
     last_outreach_date: Optional[date] = None
     outreach_notes: Optional[str] = None
     notes: Optional[str] = None
-
-    class Config:
-        from_attributes = True

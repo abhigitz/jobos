@@ -2,7 +2,7 @@ from datetime import datetime
 from typing import Optional
 from uuid import UUID
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
 class CompanyCreate(BaseModel):
@@ -39,6 +39,8 @@ class CompanyUpdate(BaseModel):
 
 
 class CompanyOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: UUID
     name: str
     lane: Optional[int] = None
@@ -69,16 +71,12 @@ class CompanyOut(BaseModel):
             self.lane_label = LANE_LABELS.get(self.lane, f"Lane {self.lane}")
         return self
 
-    class Config:
-        from_attributes = True
-
 
 class CompanySearchResult(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: UUID
     name: str
     lane: int
     sector: Optional[str] = None
     hq_city: Optional[str] = None
-
-    class Config:
-        from_attributes = True

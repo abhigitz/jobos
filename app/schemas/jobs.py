@@ -2,7 +2,7 @@ from datetime import date, datetime
 from typing import Optional
 from uuid import UUID
 
-from pydantic import BaseModel, Field, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 
 class JDAnalyzeRequest(BaseModel):
@@ -173,6 +173,8 @@ class JobUpdate(BaseModel):
 
 
 class JobOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: UUID
     company_id: Optional[UUID] = None
     company_name: str
@@ -212,9 +214,6 @@ class JobOut(BaseModel):
     followup_date: Optional[date] = None
     created_at: datetime
     updated_at: datetime
-
-    class Config:
-        from_attributes = True
 
 
 class PaginatedResponse(BaseModel):

@@ -2,18 +2,17 @@ from datetime import datetime
 from typing import List, Optional
 from uuid import UUID
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 
 class TopicOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: UUID
     topic_title: str
     category: str
     angle: Optional[str] = None
     suggested_creative: str = "text"
-
-    class Config:
-        from_attributes = True
 
 
 class StoryPromptOut(BaseModel):

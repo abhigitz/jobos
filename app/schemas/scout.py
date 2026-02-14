@@ -2,12 +2,14 @@ from datetime import date, datetime
 from typing import Any, Optional
 from uuid import UUID
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 # --- Job scouting feature schemas ---
 
 class UserScoutPreferencesOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: UUID
     user_id: UUID
     target_roles: list[str] = Field(default_factory=list)
@@ -28,9 +30,6 @@ class UserScoutPreferencesOut(BaseModel):
     created_at: datetime
     updated_at: datetime
 
-    class Config:
-        from_attributes = True
-
 
 class UserScoutPreferencesUpdate(BaseModel):
     target_roles: Optional[list[str]] = None
@@ -49,6 +48,8 @@ class UserScoutPreferencesUpdate(BaseModel):
 
 class ScoutedJobDetails(BaseModel):
     """Scouted job base details (from ScoutedJob model)."""
+    model_config = ConfigDict(from_attributes=True)
+
     id: UUID
     title: str
     company_name: str
@@ -62,12 +63,11 @@ class ScoutedJobDetails(BaseModel):
     apply_url: Optional[str] = None
     posted_date: Optional[date] = None
 
-    class Config:
-        from_attributes = True
-
 
 class UserScoutedJobOut(BaseModel):
     """User scouted job with score, reasons, and job details."""
+    model_config = ConfigDict(from_attributes=True)
+
     id: UUID
     user_id: UUID
     scouted_job_id: UUID
@@ -86,9 +86,6 @@ class UserScoutedJobOut(BaseModel):
     updated_at: datetime
     # Job details (from ScoutedJob)
     job: ScoutedJobDetails
-
-    class Config:
-        from_attributes = True
 
 
 class ScoutStatsOut(BaseModel):
@@ -117,6 +114,8 @@ class DismissRequest(BaseModel):
 # --- Legacy scout results schemas ---
 
 class ScoutResultOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: UUID
     source: str
     source_url: Optional[str] = None
@@ -134,9 +133,6 @@ class ScoutResultOut(BaseModel):
     scout_run_id: Optional[str] = None
     created_at: datetime
     updated_at: datetime
-
-    class Config:
-        from_attributes = True
 
 
 class ScoutRunSummary(BaseModel):

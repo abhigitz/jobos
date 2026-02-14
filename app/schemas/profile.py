@@ -1,6 +1,6 @@
 from typing import Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class ProfileUpdate(BaseModel):
@@ -29,6 +29,8 @@ class ProfileExtractRequest(BaseModel):
 
 
 class ProfileOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     full_name: Optional[str] = None
     positioning_statement: Optional[str] = None
     target_roles: Optional[list[str]] = None
@@ -47,6 +49,3 @@ class ProfileOut(BaseModel):
     years_of_experience: Optional[int] = None
     job_search_type: Optional[str] = None
     lane_labels: Optional[dict] = None
-
-    class Config:
-        from_attributes = True

@@ -1,6 +1,7 @@
 import asyncio
 import json
 import logging
+from datetime import datetime
 from functools import wraps
 from typing import Any, Dict, List, Optional
 
@@ -338,96 +339,105 @@ async def generate_company_deep_research(
     Generate comprehensive company research for VP/Head of Growth interview prep.
     Returns structured JSON matching the Company Deep Research schema.
     """
-    custom_section = ""
-    if custom_questions and custom_questions.strip():
-        custom_section = f"""
-CUSTOM QUESTIONS FROM USER (answer these in custom_answers.questions_answered):
-{custom_questions.strip()}
-"""
+    prompt = f"""You are a senior strategy consultant. Generate a company intelligence report for interview preparation.
 
-    prompt = f"""You are an expert business analyst preparing a candidate for a VP/Head of Growth interview at {company_name}.
+Company: {company_name}
 
-Generate comprehensive, accurate research. Use real data where available. Focus on India context where relevant.
-Insights should be useful for a senior growth leader interview.
+Return ONLY valid JSON matching this EXACT structure (no markdown, no code fences):
 
-{custom_section}
-
-Return ONLY valid JSON (no markdown, no backticks, no extra text). Structure:
 {{
   "company": {{
-    "name": "string",
-    "tagline": "string",
-    "founded": "string or null",
-    "headquarters": "string or null",
-    "employees": "string or null",
-    "funding": "string or null",
-    "valuation": "string or null",
-    "ceo": "string or null",
-    "industry": "string or null"
+    "name": "{company_name}",
+    "tagline": "One-line value proposition",
+    "founded": "2015",
+    "headquarters": "Bangalore, India",
+    "employees": "5000+",
+    "funding": "$500M total raised",
+    "valuation": "$5B (2024)",
+    "ceo": "CEO Name",
+    "industry": "E-commerce"
   }},
   "overview": {{
-    "business_model": "string",
-    "key_metrics": ["metric1", "metric2"],
-    "recent_news": ["news1", "news2"],
-    "strategic_priorities": ["priority1", "priority2"]
+    "business_model": "Detailed 2-3 sentence explanation of how the company makes money",
+    "key_metrics": [
+      {{"label": "Revenue", "value": "₹5,000 Cr", "growth": "+45% YoY", "context": "FY24"}},
+      {{"label": "Users", "value": "150M+", "growth": "+30% YoY", "context": "Monthly active"}},
+      {{"label": "GMV", "value": "$5B", "growth": "+25% YoY", "context": "Annual"}},
+      {{"label": "Market Share", "value": "28%", "growth": "+3%", "context": "In social commerce"}}
+    ],
+    "recent_news": [
+      {{"headline": "Recent development headline", "date": "Jan 2025", "impact": "Positive"}},
+      {{"headline": "Another recent news item", "date": "Dec 2024", "impact": "Neutral"}}
+    ],
+    "strategic_priorities": ["Priority 1", "Priority 2", "Priority 3"]
   }},
   "competitors": [
     {{
-      "name": "string",
-      "color": "#hex (e.g. #F59E0B)",
-      "tagline": "string",
-      "model": "string",
-      "revenue": "string",
-      "market_share": "string",
-      "strengths": ["s1", "s2"],
-      "weaknesses": ["w1", "w2"],
-      "threat_level": "string (e.g. Primary Rival, Direct Competitor)"
+      "name": "Competitor Name",
+      "color": "#3B82F6",
+      "tagline": "Their positioning",
+      "model": "Business model summary",
+      "revenue": "₹10,000 Cr",
+      "market_share": "35%",
+      "strengths": ["Strength 1", "Strength 2", "Strength 3"],
+      "weaknesses": ["Weakness 1", "Weakness 2"],
+      "threat_level": "High"
     }}
   ],
   "positioning": {{
-    "competitive_advantages": ["adv1", "adv2"],
-    "market_position": "string",
-    "differentiation": "string"
+    "competitive_advantages": ["Advantage 1", "Advantage 2", "Advantage 3"],
+    "market_position": "2-3 sentence description of market position",
+    "differentiation": "What makes them unique vs competitors"
   }},
   "user_personas": [
     {{
-      "name": "string",
-      "emoji": "string (e.g. 👩‍💼)",
-      "age": "string",
-      "location": "string",
-      "income": "string",
-      "behavior": "string",
-      "goals": ["g1", "g2"],
-      "pain_points": ["p1", "p2"],
-      "platforms": "string"
+      "name": "Persona Name - The Descriptor",
+      "emoji": "👩‍💼",
+      "age": "25-35",
+      "location": "Tier 2/3 cities",
+      "income": "₹20K-40K/month",
+      "behavior": "Key behavioral traits",
+      "goals": ["Goal 1", "Goal 2"],
+      "pain_points": ["Pain point 1", "Pain point 2"],
+      "platforms": "Where they shop/engage"
     }}
   ],
   "opportunities": {{
-    "market_gaps": ["gap1", "gap2"],
-    "growth_levers": ["lever1", "lever2"],
-    "threats": ["threat1", "threat2"],
-    "strategic_recommendations": ["rec1", "rec2"]
+    "market_gaps": [
+      {{"gap": "Gap description", "opportunity": "How to exploit", "difficulty": "Medium"}}
+    ],
+    "growth_levers": ["Lever 1", "Lever 2", "Lever 3"],
+    "threats": ["Threat 1", "Threat 2"],
+    "strategic_recommendations": ["Recommendation 1", "Recommendation 2"]
   }},
   "interview_prep": {{
-    "likely_questions": ["q1", "q2"],
-    "topics_to_research_further": ["topic1", "topic2"],
-    "talking_points": ["point1", "point2"],
-    "red_flags_to_avoid": ["flag1", "flag2"]
+    "likely_questions": [
+      {{"question": "Likely interview question?", "suggested_angle": "How to approach this"}},
+      {{"question": "Another question?", "suggested_angle": "Suggested framing"}}
+    ],
+    "topics_to_research_further": ["Topic 1", "Topic 2"],
+    "talking_points": ["Point 1", "Point 2", "Point 3"],
+    "red_flags_to_avoid": ["Don't mention X", "Avoid topic Y"]
   }},
   "custom_answers": {{
-    "questions_answered": [{{"question": "string", "answer": "string"}}]
+    "questions_answered": []
   }},
-  "sources": ["source1", "source2"],
-  "generated_at": "ISO 8601 timestamp"
+  "sources": ["Source 1", "Source 2"],
+  "generated_at": "{datetime.utcnow().isoformat()}"
 }}
 
-RULES:
-- Use real, accurate data where available. If unknown, use null or empty arrays.
-- Focus on India context where relevant (e.g. Tier 2/3 cities, Indian market dynamics).
-- Insights must be useful for VP/Head of Growth interview.
-- Never use em dash. Use commas, periods, or hyphens.
-- Assign distinct hex colors to competitors (e.g. #F59E0B, #3B82F6, #10B981).
-- generated_at must be current ISO 8601 timestamp."""
+{f"Also answer these custom questions and include them in custom_answers.questions_answered as objects with 'question' and 'answer' keys: {custom_questions}" if custom_questions else ""}
+
+CRITICAL:
+- Return ONLY the JSON object, no markdown formatting
+- key_metrics MUST be array of objects with label/value/growth/context keys
+- recent_news MUST be array of objects with headline/date/impact keys
+- Use real data for {company_name} where available
+- For India companies, use ₹ for currency
+- threat_level must be "High", "Medium", or "Low"
+- difficulty must be "High", "Medium", or "Low"
+- impact must be "Positive", "Negative", or "Neutral"
+"""
 
     result = await call_claude(prompt, max_tokens=8000, task_type="deep")
     parsed = parse_json_response(result)

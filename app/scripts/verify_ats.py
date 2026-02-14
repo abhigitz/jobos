@@ -1,5 +1,5 @@
 """
-ATS verification script — tests all 18 company job board integrations
+ATS verification script — tests verified ATS job board integrations
 (Greenhouse and Lever).
 """
 
@@ -11,30 +11,23 @@ from typing import Optional
 
 import httpx
 
+# Verified ATS boards as of Feb 2026
+# To add new companies, find their public board at:
+# - Greenhouse: https://boards.greenhouse.io/{token}/jobs
+# - Lever: https://api.lever.co/v0/postings/{slug}
+
 # Greenhouse: company display name -> board token
 GREENHOUSE_COMPANIES: dict[str, str] = {
     "PhonePe": "phonepe",
-    "Razorpay": "razorpay",
-    "Flipkart": "flipkart",
-    "Myntra": "myntra",
-    "Groww": "groww82",
-    "Zerodha": "zerodha",
-    "Cult.fit": "cultfit",
-    "Urban Company": "urbancompany",
-    "Lenskart": "lenskart",
-    "Nykaa": "nykaa",
+    "Razorpay": "razorpaysoftwareprivatelimited",
 }
 
 # Lever: company display name -> company slug
 LEVER_COMPANIES: dict[str, str] = {
     "CRED": "cred",
     "Meesho": "meesho",
-    "Zepto": "zepto",
-    "Jupiter": "jupiter-money",
-    "Slice": "sliceit",
-    "Khatabook": "khatabook",
-    "Unacademy": "unacademy",
-    "ShareChat": "sharechat",
+    "Paytm": "paytm",
+    "Zeta": "zeta",
 }
 
 logging.basicConfig(level=logging.INFO)
@@ -184,7 +177,7 @@ def _truncate(s: Optional[str], max_len: int = 28) -> str:
 
 
 async def verify_all_ats() -> None:
-    """Verify all 18 ATS integrations concurrently and print results."""
+    """Verify all ATS integrations concurrently and print results."""
     tasks = []
 
     async with httpx.AsyncClient() as client:
@@ -259,7 +252,8 @@ async def verify_all_ats() -> None:
 
     print("╚════════════════════════╩════════════╩════════╩═══════╩════════════════════════════╝")
     print()
-    print(f"Summary: {passed}/18 passed (HTTP 200), {failed} failed")
+    total = passed + failed
+    print(f"Summary: {passed}/{total} passed (HTTP 200), {failed} failed")
     print(f"Total jobs found: {total_jobs}")
     print()
 

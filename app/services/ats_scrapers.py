@@ -17,30 +17,23 @@ from app.services.serpapi_service import (
 
 logger = logging.getLogger(__name__)
 
-# Company key -> Greenhouse board ID
+# Verified ATS boards as of Feb 2026
+# To add new companies, find their public board at:
+# - Greenhouse: https://boards.greenhouse.io/{token}/jobs
+# - Lever: https://api.lever.co/v0/postings/{slug}
+
+# Company display name -> Greenhouse board ID
 GREENHOUSE_COMPANIES: dict[str, str] = {
-    "phonepe": "phonepe",
-    "razorpay": "razorpaysoftwareprivatelimited",
-    "flipkart": "flipkart",
-    "myntra": "myntra",
-    "groww": "groww",
-    "zerodha": "zerodha",
-    "curefit": "caborneoadvisors",  # Cult.fit parent company
-    "urban_company": "urbancompany",
-    "lenskart": "laborx",  # Lenskart's Greenhouse board
-    "nykaa": "nykaa",
+    "PhonePe": "phonepe",
+    "Razorpay": "razorpaysoftwareprivatelimited",
 }
 
-# Company key -> Lever posting ID
+# Company display name -> Lever posting slug
 LEVER_COMPANIES: dict[str, str] = {
-    "cred": "cred",
-    "meesho": "meesho",
-    "zepto": "zepto",
-    "jupiter": "jupiter-money",
-    "slice": "slicepay",
-    "khatabook": "khatabook",
-    "unacademy": "unacademy",
-    "sharechat": "sharechatapp",
+    "CRED": "cred",
+    "Meesho": "meesho",
+    "Paytm": "paytm",
+    "Zeta": "zeta",
 }
 
 # Slug -> display name for special cases

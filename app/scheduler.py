@@ -27,7 +27,7 @@ scheduler = AsyncIOScheduler(jobstores=jobstores)
 
 def register_jobs() -> None:
     """Register all scheduled jobs. Called once at startup."""
-    from app.tasks.db_backup import run_daily_backup
+    from app.tasks.db_backup import backup_database
     from app.tasks.evening_checkin import evening_checkin_task
     from app.tasks.midday_check import midday_check_task
     from app.tasks.morning_briefing import morning_briefing_task
@@ -103,7 +103,7 @@ def register_jobs() -> None:
 
     # 2:00 AM UTC = 7:30 AM IST, daily (Database Backup)
     scheduler.add_job(
-        run_daily_backup,
+        backup_database,
         CronTrigger(hour=2, minute=0),
         id="daily_backup",
         replace_existing=True,

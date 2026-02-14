@@ -1,24 +1,27 @@
-"""Daily database backup task.
+"""Cloudflare R2 database backup task.
 
-On Railway: verifies DB connection and logs that Railway manages backups.
-Locally: exports critical tables to JSON (no pg_dump required).
+Exports critical tables to JSON, compresses with gzip, and uploads to R2.
 """
+import gzip
 import json
 import logging
 import os
-from datetime import date, datetime, timezone
-from pathlib import Path
+import re
+from datetime import datetime
 from typing import Any
+from uuid import UUID
 
-from sqlalchemy import select, text
+import boto3
+from botocore.config import Config
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.config import get_settings
 from app.database import AsyncSessionLocal
 from app.models import (
     Company,
     Contact,
     Job,
+    ResumeFile,
     ScoutedJob,
     User,
     UserScoutPreferences,
@@ -27,203 +30,242 @@ from app.models import (
 
 logger = logging.getLogger(__name__)
 
-BACKUP_DIR = Path("/tmp")
+# R2 env vars
+R2_ENDPOINT_URL = "R2_ENDPOINT_URL"
+R2_ACCESS_KEY_ID = "R2_ACCESS_KEY_ID"
+R2_SECRET_ACCESS_KEY = "R2_SECRET_ACCESS_KEY"
+R2_BUCKET_NAME = "R2_BUCKET_NAME"
 
 
-def _serialize_value(val: Any) -> Any:
+def get_r2_client():
+    """Create boto3 S3 client for Cloudflare R2."""
+    return boto3.client(
+        "s3",
+        endpoint_url=os.environ.get(R2_ENDPOINT_URL),
+        aws_access_key_id=os.environ.get(R2_ACCESS_KEY_ID),
+        aws_secret_access_key=os.environ.get(R2_SECRET_ACCESS_KEY),
+        config=Config(signature_version="s3v4"),
+        region_name="auto",
+    )
+
+
+def serialize_value(value: Any) -> Any:
     """Convert non-JSON-serializable values for export."""
-    if val is None:
+    if value is None:
         return None
-    if isinstance(val, (datetime, date)):
-        return val.isoformat()
-    if hasattr(val, "hex"):  # UUID
-        return str(val)
-    if isinstance(val, list):
-        return [_serialize_value(v) for v in val]
-    if isinstance(val, dict):
-        return {k: _serialize_value(v) for k, v in val.items()}
-    return val
+    if isinstance(value, datetime):
+        return value.isoformat()
+    if isinstance(value, UUID):
+        return str(value)
+    if isinstance(value, bytes):
+        return value.decode("utf-8", errors="ignore")
+    return value
 
 
-def _model_to_dict(instance: Any, exclude: set[str] | None = None) -> dict[str, Any]:
-    """Convert SQLAlchemy model instance to JSON-serializable dict."""
-    exclude = exclude or set()
-    result: dict[str, Any] = {}
-    for col in instance.__table__.columns:
-        if col.key in exclude:
+def model_to_dict(model_instance: Any) -> dict:
+    """Convert SQLAlchemy model to dict. Skips keys starting with '_'."""
+    result = {}
+    for col in model_instance.__table__.columns:
+        key = col.key
+        if key.startswith("_"):
             continue
-        val = getattr(instance, col.key)
-        result[col.key] = _serialize_value(val)
+        val = getattr(model_instance, key)
+        result[key] = serialize_value(val)
     return result
 
 
-async def _export_tables_to_json(backup_path: Path) -> dict[str, int]:
-    """Export critical tables to a single JSON file. Returns row counts per table."""
-    counts: dict[str, int] = {}
-    data: dict[str, list[dict[str, Any]]] = {}
+async def export_tables_to_json(db: AsyncSession) -> dict:
+    """Export all backup tables to a JSON-serializable dict."""
+    tables_data = {}
+    counts = {}
 
-    async with AsyncSessionLocal() as db:
-        # Users (excluding hashed_password)
-        try:
-            result = await db.execute(select(User))
-            users = result.scalars().all()
-            data["users"] = [_model_to_dict(u, exclude={"hashed_password"}) for u in users]
-            counts["users"] = len(users)
-        except Exception as e:
-            logger.error("Failed to export users: %s", e)
-            raise
+    # users (exclude password_hash / hashed_password from output)
+    result = await db.execute(select(User))
+    users = result.scalars().all()
+    user_dicts = [model_to_dict(u) for u in users]
+    for d in user_dicts:
+        d.pop("password_hash", None)
+        d.pop("hashed_password", None)
+    tables_data["users"] = user_dicts
+    counts["users"] = len(users)
 
-        # Jobs
-        try:
-            result = await db.execute(select(Job))
-            jobs = result.scalars().all()
-            data["jobs"] = [_model_to_dict(j) for j in jobs]
-            counts["jobs"] = len(jobs)
-        except Exception as e:
-            logger.error("Failed to export jobs: %s", e)
-            raise
+    # jobs
+    result = await db.execute(select(Job))
+    jobs = result.scalars().all()
+    tables_data["jobs"] = [model_to_dict(j) for j in jobs]
+    counts["jobs"] = len(jobs)
 
-        # Companies
-        try:
-            result = await db.execute(select(Company))
-            companies = result.scalars().all()
-            data["companies"] = [_model_to_dict(c) for c in companies]
-            counts["companies"] = len(companies)
-        except Exception as e:
-            logger.error("Failed to export companies: %s", e)
-            raise
+    # companies
+    result = await db.execute(select(Company))
+    companies = result.scalars().all()
+    tables_data["companies"] = [model_to_dict(c) for c in companies]
+    counts["companies"] = len(companies)
 
-        # Contacts
-        try:
-            result = await db.execute(select(Contact))
-            contacts = result.scalars().all()
-            data["contacts"] = [_model_to_dict(c) for c in contacts]
-            counts["contacts"] = len(contacts)
-        except Exception as e:
-            logger.error("Failed to export contacts: %s", e)
-            raise
+    # contacts
+    result = await db.execute(select(Contact))
+    contacts = result.scalars().all()
+    tables_data["contacts"] = [model_to_dict(c) for c in contacts]
+    counts["contacts"] = len(contacts)
 
-        # User scout preferences
-        try:
-            result = await db.execute(select(UserScoutPreferences))
-            prefs = result.scalars().all()
-            data["user_scout_preferences"] = [_model_to_dict(p) for p in prefs]
-            counts["user_scout_preferences"] = len(prefs)
-        except Exception as e:
-            logger.error("Failed to export user_scout_preferences: %s", e)
-            raise
+    # resumes (ResumeFile model)
+    result = await db.execute(select(ResumeFile))
+    resumes = result.scalars().all()
+    tables_data["resumes"] = [model_to_dict(r) for r in resumes]
+    counts["resumes"] = len(resumes)
 
-        # Scouted jobs
-        try:
-            result = await db.execute(select(ScoutedJob))
-            jobs = result.scalars().all()
-            data["scouted_jobs"] = [_model_to_dict(j) for j in jobs]
-            counts["scouted_jobs"] = len(jobs)
-        except Exception as e:
-            logger.error("Failed to export scouted_jobs: %s", e)
-            raise
+    # user_scout_preferences
+    result = await db.execute(select(UserScoutPreferences))
+    prefs = result.scalars().all()
+    tables_data["user_scout_preferences"] = [model_to_dict(p) for p in prefs]
+    counts["user_scout_preferences"] = len(prefs)
 
-        # User scouted jobs
-        try:
-            result = await db.execute(select(UserScoutedJob))
-            uj = result.scalars().all()
-            data["user_scouted_jobs"] = [_model_to_dict(u) for u in uj]
-            counts["user_scouted_jobs"] = len(uj)
-        except Exception as e:
-            logger.error("Failed to export user_scouted_jobs: %s", e)
-            raise
+    # scouted_jobs
+    result = await db.execute(select(ScoutedJob))
+    scouted = result.scalars().all()
+    tables_data["scouted_jobs"] = [model_to_dict(j) for j in scouted]
+    counts["scouted_jobs"] = len(scouted)
 
-    with open(backup_path, "w") as f:
-        json.dump(data, f, indent=2, default=str)
+    # user_scouted_jobs
+    result = await db.execute(select(UserScoutedJob))
+    user_scouted = result.scalars().all()
+    tables_data["user_scouted_jobs"] = [model_to_dict(u) for u in user_scouted]
+    counts["user_scouted_jobs"] = len(user_scouted)
 
-    return counts
+    return {
+        "exported_at": datetime.utcnow().isoformat(),
+        "tables": tables_data,
+        "counts": counts,
+    }
 
 
-async def _verify_db_connection(db: AsyncSession) -> bool:
-    """Verify database connection is working."""
+def upload_to_r2(data: bytes, filename: str) -> bool:
+    """Upload data to R2 bucket. Returns True on success, False on failure."""
     try:
-        await db.execute(text("SELECT 1"))
+        client = get_r2_client()
+        bucket = os.environ.get(R2_BUCKET_NAME)
+        if not bucket:
+            logger.error("R2_BUCKET_NAME not set")
+            return False
+        client.put_object(Bucket=bucket, Key=filename, Body=data)
         return True
     except Exception as e:
-        logger.error("DB connection check failed: %s", e)
+        logger.error("R2 upload failed: %s", e, exc_info=True)
         return False
 
 
-async def _notify_telegram(status: str, message: str) -> None:
-    """Send backup status notification to owner via Telegram."""
-    try:
+async def backup_database() -> None:
+    """Export DB to JSON, compress, upload to R2, and notify via Telegram."""
+    required = [R2_ENDPOINT_URL, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY, R2_BUCKET_NAME]
+    if not all(os.environ.get(k) for k in required):
+        from app.config import get_settings
+        from app.services.telegram_service import send_telegram_message
+
         settings = get_settings()
         if settings.telegram_bot_token and settings.owner_telegram_chat_id:
-            from app.services.telegram_service import send_telegram_message
+            await send_telegram_message(
+                settings.owner_telegram_chat_id,
+                "⚠️ JobOS Backup Skipped - R2 credentials not configured",
+            )
+        return
 
-            if status == "success":
-                emoji = "✅"
-            elif status == "skip":
-                emoji = "ℹ️"
-            else:
-                emoji = "⚠️"
-            msg = f"{emoji} *JobOS Backup*\n\n{message[:500]}"
-            await send_telegram_message(settings.owner_telegram_chat_id, msg)
-    except Exception as e:
-        logger.warning("Could not send Telegram notification: %s", e)
-
-
-async def run_daily_backup() -> dict:
-    """Run daily backup. On Railway: verify DB only. Locally: export tables to JSON."""
-    is_railway = bool(os.environ.get("RAILWAY_ENVIRONMENT"))
-
+    db = None
     try:
         async with AsyncSessionLocal() as db:
-            if not await _verify_db_connection(db):
-                await _notify_telegram("fail", "Database connection verification failed.")
-                return {"success": False, "error": "DB connection failed"}
+            data = await export_tables_to_json(db)
 
-        if is_railway:
-            logger.info("Railway manages backups. DB connection verified.")
-            await _notify_telegram("skip", "Railway manages backups. DB connection verified.")
-            return {
-                "success": True,
-                "mode": "railway",
-                "message": "Railway manages backups",
-            }
+        json_str = json.dumps(data, indent=2, default=str)
+        json_bytes = json_str.encode("utf-8")
+        compressed_data = gzip.compress(json_bytes)
 
-        # Local: export critical tables to JSON
-        timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
-        backup_path = BACKUP_DIR / f"jobos_backup_{timestamp}.json"
+        filename = f"jobos_backup_{datetime.utcnow().strftime('%Y-%m-%d_%H-%M')}.json.gz"
 
-        try:
-            counts = await _export_tables_to_json(backup_path)
-        except Exception as e:
-            logger.error("JSON export failed: %s", e, exc_info=True)
-            await _notify_telegram("fail", f"Backup export failed: {str(e)[:400]}")
-            return {"success": False, "error": str(e)}
+        if not upload_to_r2(compressed_data, filename):
+            raise RuntimeError("R2 upload failed")
 
-        file_size = backup_path.stat().st_size
-        total_rows = sum(counts.values())
-        summary = ", ".join(f"{k}: {v}" for k, v in counts.items())
+        size_kb = len(compressed_data) / 1024
+        counts = data["counts"]
+        counts_str = ", ".join(f"{k}({v})" for k, v in counts.items())
 
-        logger.info(
-            "Backup created: %s (%.1f KB, %d rows)",
-            backup_path.name,
-            file_size / 1024,
-            total_rows,
-        )
+        from app.config import get_settings
+        from app.services.telegram_service import send_telegram_message
 
-        await _notify_telegram(
-            "success",
-            f"Backup created: {backup_path.name}\n{total_rows} rows\n{summary}",
-        )
+        settings = get_settings()
+        msg = f"""✅ JobOS Backup Complete
+📁 File: {filename}
+📊 Size: {size_kb:.1f} KB
+📋 Tables: {counts_str}
+☁️ Stored in: Cloudflare R2"""
 
-        return {
-            "success": True,
-            "mode": "local",
-            "file": backup_path.name,
-            "size_kb": round(file_size / 1024, 1),
-            "row_counts": counts,
-            "total_rows": total_rows,
-        }
+        if settings.telegram_bot_token and settings.owner_telegram_chat_id:
+            await send_telegram_message(settings.owner_telegram_chat_id, msg)
 
     except Exception as e:
-        logger.error("Backup error: %s", str(e), exc_info=True)
-        await _notify_telegram("fail", f"Backup error: {str(e)[:400]}")
-        return {"success": False, "error": str(e)}
+        logger.error("Backup failed: %s", e, exc_info=True)
+        from app.config import get_settings
+        from app.services.telegram_service import send_telegram_message
+
+        settings = get_settings()
+        if settings.telegram_bot_token and settings.owner_telegram_chat_id:
+            await send_telegram_message(
+                settings.owner_telegram_chat_id,
+                f"❌ JobOS Backup Failed: {str(e)}",
+            )
+
+
+def cleanup_old_backups(keep_days: int = 30, keep_minimum: int = 7) -> None:
+    """Delete backup files older than keep_days, but always keep at least keep_minimum."""
+    if not all(os.environ.get(k) for k in [R2_ENDPOINT_URL, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY, R2_BUCKET_NAME]):
+        return
+
+    try:
+        client = get_r2_client()
+        bucket = os.environ.get(R2_BUCKET_NAME)
+        if not bucket:
+            return
+
+        response = client.list_objects_v2(Bucket=bucket)
+        objects = response.get("Contents", [])
+        if not objects:
+            return
+
+        # Parse dates from filenames: jobos_backup_YYYY-MM-DD_HH-MM.json.gz
+        pattern = re.compile(r"jobos_backup_(\d{4}-\d{2}-\d{2})_\d{2}-\d{2}\.json\.gz")
+        dated = []
+        for obj in objects:
+            key = obj.get("Key", "")
+            m = pattern.match(key)
+            if m:
+                try:
+                    dt = datetime.strptime(m.group(1), "%Y-%m-%d")
+                    dated.append((dt, key, obj))
+                except ValueError:
+                    pass
+
+        dated.sort(key=lambda x: x[0], reverse=True)
+
+        cutoff = datetime.utcnow()
+        from datetime import timedelta
+        cutoff = cutoff - timedelta(days=keep_days)
+
+        to_delete = []
+        kept = 0
+        for dt, key, obj in dated:
+            if kept < keep_minimum:
+                kept += 1
+                continue
+            if dt < cutoff:
+                to_delete.append({"Key": key})
+
+        for item in to_delete:
+            client.delete_object(Bucket=bucket, Key=item["Key"])
+            logger.info("Deleted old backup: %s", item["Key"])
+
+    except Exception as e:
+        logger.error("Cleanup old backups failed: %s", e, exc_info=True)
+
+
+# Legacy entry point for scheduler compatibility
+async def run_daily_backup() -> dict:
+    """Run daily backup. Uses R2 if configured, otherwise skips."""
+    await backup_database()
+    return {"success": True, "mode": "r2"}

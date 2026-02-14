@@ -6,6 +6,18 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
 class CompanyCreate(BaseModel):
+    model_config = ConfigDict(
+        json_schema_extra={
+            "examples": [
+                {
+                    "name": "Acme Corp",
+                    "lane": 2,
+                    "sector": "Consumer Tech",
+                    "website": "https://acme.com",
+                }
+            ]
+        }
+    )
     name: str = Field(..., max_length=255)
     lane: int
     stage: Optional[str] = Field(None, max_length=50)
@@ -39,8 +51,21 @@ class CompanyUpdate(BaseModel):
 
 
 class CompanyOut(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
-
+    model_config = ConfigDict(
+        from_attributes=True,
+        json_schema_extra={
+            "examples": [
+                {
+                    "id": "550e8400-e29b-41d4-a716-446655440000",
+                    "name": "Acme Corp",
+                    "lane": 2,
+                    "lane_label": "Growth-stage (Series C-D)",
+                    "sector": "Consumer Tech",
+                    "website": "https://acme.com",
+                }
+            ]
+        },
+    )
     id: UUID
     name: str
     lane: Optional[int] = None

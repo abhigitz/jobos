@@ -77,6 +77,19 @@ class AddNoteRequest(BaseModel):
 
 
 class JobCreate(BaseModel):
+    model_config = ConfigDict(
+        json_schema_extra={
+            "examples": [
+                {
+                    "company": "Acme Corp",
+                    "role": "Senior Product Manager",
+                    "jd_text": "We are looking for...",
+                    "source_portal": "LinkedIn",
+                    "status": "Tracking",
+                }
+            ]
+        }
+    )
     company_name: str = Field(..., max_length=255, alias="company")
     role_title: str = Field(..., max_length=255, alias="role")
     jd_text: Optional[str] = None
@@ -173,8 +186,22 @@ class JobUpdate(BaseModel):
 
 
 class JobOut(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
-
+    model_config = ConfigDict(
+        from_attributes=True,
+        json_schema_extra={
+            "examples": [
+                {
+                    "id": "550e8400-e29b-41d4-a716-446655440000",
+                    "company_name": "Acme Corp",
+                    "role_title": "Senior Product Manager",
+                    "status": "Applied",
+                    "fit_score": 8.5,
+                    "ats_score": 75,
+                    "source_portal": "LinkedIn",
+                }
+            ]
+        },
+    )
     id: UUID
     company_id: Optional[UUID] = None
     company_name: str

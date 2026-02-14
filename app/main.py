@@ -70,7 +70,40 @@ from slowapi.errors import RateLimitExceeded
 from app.dependencies import limiter
 from app.database import get_db
 
-app = FastAPI(title="JobOS API", version="0.2.0", lifespan=lifespan, redirect_slashes=False)
+app = FastAPI(
+    title="JobOS API",
+    description="""
+## JobOS API Overview
+
+JobOS is a comprehensive job search and career management platform. This API provides:
+
+- **Authentication** — User registration, login, password reset, and JWT token management
+- **Jobs** — Job pipeline management, JD analysis, follow-ups, interviews, and AI-powered insights
+- **Companies** — Company tracking, research, and deep-dive analysis
+- **Scout** — AI-powered job scouting based on your preferences
+- **Profile** — Professional profile and resume management
+- **Contacts** — Networking contact tracking and follow-up management
+- **Content** — LinkedIn content calendar and AI draft generation
+- **Analytics** — Dashboard, funnel metrics, and weekly reviews
+- **Admin** — Backup and system administration
+
+All endpoints under `/api/v1` require Bearer token authentication unless otherwise noted.
+""",
+    version="1.0.0",
+    contact={
+        "name": "JobOS Support",
+        "url": "https://jobos.app",
+        "email": "support@jobos.app",
+    },
+    license_info={
+        "name": "Proprietary",
+        "url": "https://jobos.app/license",
+    },
+    lifespan=lifespan,
+    redirect_slashes=False,
+    docs_url="/docs",
+    redoc_url="/redoc",
+)
 
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
@@ -167,23 +200,23 @@ from .routers import (  # noqa: E402
 api_v1 = APIRouter(prefix="/api/v1")
 
 # Add all routers to v1
-api_v1.include_router(activity.router, prefix="/activity", tags=["activity"])
-api_v1.include_router(admin.router, prefix="/admin", tags=["admin"])
-api_v1.include_router(auth.router, prefix="/auth", tags=["auth"])
-api_v1.include_router(profile.router, prefix="/profile", tags=["profile"])
-api_v1.include_router(jobs.router, prefix="/jobs", tags=["jobs"])
-api_v1.include_router(companies.router, prefix="/companies", tags=["companies"])
-api_v1.include_router(contacts.router, prefix="/contacts", tags=["contacts"])
-api_v1.include_router(content.router, prefix="/content", tags=["content"])
-api_v1.include_router(analytics.router, prefix="/analytics", tags=["analytics"])
-api_v1.include_router(telegram.router, prefix="/telegram", tags=["telegram"])
-api_v1.include_router(briefing.router, prefix="/briefing", tags=["briefing"])
-api_v1.include_router(resume.router, prefix="/resume", tags=["resume"])
-api_v1.include_router(briefings_user.router, prefix="/briefings", tags=["briefings"])
+api_v1.include_router(activity.router, prefix="/activity", tags=["Activity"])
+api_v1.include_router(admin.router, prefix="/admin", tags=["Admin"])
+api_v1.include_router(auth.router, prefix="/auth", tags=["Authentication"])
+api_v1.include_router(profile.router, prefix="/profile", tags=["Profile"])
+api_v1.include_router(jobs.router, prefix="/jobs", tags=["Jobs"])
+api_v1.include_router(companies.router, prefix="/companies", tags=["Companies"])
+api_v1.include_router(contacts.router, prefix="/contacts", tags=["Contacts"])
+api_v1.include_router(content.router, prefix="/content", tags=["Content"])
+api_v1.include_router(analytics.router, prefix="/analytics", tags=["Analytics"])
+api_v1.include_router(telegram.router, prefix="/telegram", tags=["Telegram"])
+api_v1.include_router(briefing.router, prefix="/briefing", tags=["Briefing"])
+api_v1.include_router(resume.router, prefix="/resume", tags=["Resume"])
+api_v1.include_router(briefings_user.router, prefix="/briefings", tags=["Briefings"])
 api_v1.include_router(content_studio.router)
-api_v1.include_router(daily_logs.router, prefix="/daily-logs", tags=["daily-logs"])
-api_v1.include_router(interviews.router, prefix="/interviews", tags=["interviews"])
-api_v1.include_router(scout.router, prefix="/scout", tags=["scout"])
+api_v1.include_router(daily_logs.router, prefix="/daily-logs", tags=["Daily Logs"])
+api_v1.include_router(interviews.router, prefix="/interviews", tags=["Interviews"])
+api_v1.include_router(scout.router, prefix="/scout", tags=["Scout"])
 api_v1.include_router(search.router)
 
 # Mount v1 router
@@ -211,9 +244,13 @@ async def debug_unhandled_exception(request, exc):
     return JSONResponse(status_code=500, content={"detail": "Internal server error"})
 
 
-@app.get("/health")
+@app.get("/health", status_code=200)
 async def health_check(db=Depends(get_db)):
-    """Deep health check with database connectivity."""
+    """
+    Deep health check with database connectivity.
+
+    **Response:** {status: "ok"|"degraded", checks: {database: "ok"|"error: ..."}}
+    """
     from sqlalchemy import text
 
     health: dict = {"status": "ok", "checks": {}}

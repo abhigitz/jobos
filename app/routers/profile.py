@@ -17,11 +17,17 @@ router = APIRouter()
 logger = logging.getLogger(__name__)
 
 
-@router.get("", response_model=ProfileOut)
+@router.get("", response_model=ProfileOut, status_code=200)
 async def get_profile(
     db: AsyncSession = Depends(get_db),
     current_user=Depends(get_current_user),
 ) -> ProfileOut:
+    """
+    Get current user's professional profile.
+
+    **Response:** ProfileOut
+    **Errors:** 404 (profile not found), 401 (unauthorized)
+    """
     result = await db.execute(select(ProfileDNA).where(ProfileDNA.user_id == current_user.id))
     profile = result.scalar_one_or_none()
     if profile is None:
@@ -29,12 +35,19 @@ async def get_profile(
     return ProfileOut.model_validate(profile)
 
 
-@router.put("", response_model=ProfileOut)
+@router.put("", response_model=ProfileOut, status_code=200)
 async def update_profile(
     payload: ProfileUpdate,
     db: AsyncSession = Depends(get_db),
     current_user=Depends(get_current_user),
 ) -> ProfileOut:
+    """
+    Full update of profile. Creates profile if missing.
+
+    **Request:** ProfileUpdate (partial fields)
+    **Response:** ProfileOut
+    **Errors:** 401 (unauthorized)
+    """
     result = await db.execute(select(ProfileDNA).where(ProfileDNA.user_id == current_user.id))
     profile = result.scalar_one_or_none()
     if profile is None:
@@ -49,13 +62,19 @@ async def update_profile(
     return ProfileOut.model_validate(profile)
 
 
-@router.patch("", response_model=ProfileOut)
+@router.patch("", response_model=ProfileOut, status_code=200)
 async def patch_profile(
     payload: ProfileUpdate,
     db: AsyncSession = Depends(get_db),
     current_user=Depends(get_current_user),
 ) -> ProfileOut:
-    """Update individual profile fields (PATCH semantics)."""
+    """
+    Partial update of profile. Creates profile if missing.
+
+    **Request:** ProfileUpdate (partial fields)
+    **Response:** ProfileOut
+    **Errors:** 401 (unauthorized)
+    """
     result = await db.execute(select(ProfileDNA).where(ProfileDNA.user_id == current_user.id))
     profile = result.scalar_one_or_none()
     if profile is None:
@@ -70,7 +89,7 @@ async def patch_profile(
     return ProfileOut.model_validate(profile)
 
 
-@router.post("/extract", response_model=dict)
+@router.post("/extract", response_model=dict, status_code=200)
 @limiter.limit("50/hour")
 async def extract_profile_from_resume(
     request: Request,
@@ -78,7 +97,13 @@ async def extract_profile_from_resume(
     db: AsyncSession = Depends(get_db),
     current_user=Depends(get_current_user),
 ):
-    """Send resume text → Claude extracts structured profile → upsert profile_dna."""
+    """
+    Extract structured profile from resume text using AI. Upserts profile_dna.
+
+    **Request:** ProfileExtractRequest (resume_text, min 500 chars)
+    **Response:** {profile: ProfileOut, keyword_count: int}
+    **Errors:** 502/503 (AI extraction failed), 401 (unauthorized)
+    """
     prompt = f"""Extract a structured professional profile from this resume.
 
 CRITICAL RULES:

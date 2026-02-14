@@ -9,7 +9,7 @@ from fastapi.responses import StreamingResponse
 from app.dependencies import get_current_user
 from app.models.user import User
 
-router = APIRouter(tags=["admin"])
+router = APIRouter(tags=["Admin"])
 
 R2_ENDPOINT_URL = "R2_ENDPOINT_URL"
 R2_ACCESS_KEY_ID = "R2_ACCESS_KEY_ID"
@@ -34,11 +34,16 @@ def _get_r2_client():
     )
 
 
-@router.get("/backup/list")
+@router.get("/backup/list", status_code=200)
 async def list_backups(
     current_user: User = Depends(get_current_user),
 ):
-    """List all backup files in R2 bucket."""
+    """
+    List all backup files in R2 bucket.
+
+    **Response:** [{filename, size_kb, last_modified}, ...]
+    **Errors:** 401 (unauthorized), 503 (R2 not configured)
+    """
     client = _get_r2_client()
     bucket = os.environ.get(R2_BUCKET_NAME)
     response = client.list_objects_v2(Bucket=bucket)
@@ -58,12 +63,17 @@ async def list_backups(
     return result
 
 
-@router.get("/backup/download/{filename}")
+@router.get("/backup/download/{filename}", status_code=200)
 async def download_backup(
     filename: str,
     current_user: User = Depends(get_current_user),
 ):
-    """Download a backup file from R2."""
+    """
+    Download a backup file from R2.
+
+    **Response:** application/gzip stream
+    **Errors:** 400 (invalid filename), 404 (not found), 401 (unauthorized)
+    """
     if ".." in filename or "/" in filename or not filename.endswith(".json.gz"):
         raise HTTPException(status_code=400, detail="Invalid filename")
 
@@ -86,11 +96,16 @@ async def download_backup(
     )
 
 
-@router.post("/backup/trigger")
+@router.post("/backup/trigger", status_code=200)
 async def trigger_backup(
     current_user: User = Depends(get_current_user),
 ):
-    """Manually trigger database backup to R2."""
+    """
+    Manually trigger database backup to R2.
+
+    **Response:** {status: "success", message: "Backup triggered"}
+    **Errors:** 401 (unauthorized)
+    """
     from app.tasks.db_backup import backup_database
 
     await backup_database()

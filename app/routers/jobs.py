@@ -70,7 +70,7 @@ class FollowupAction(BaseModel):
 
 # --- Existing endpoints ---
 
-@router.get("", response_model=PaginatedResponse)
+@router.get("", response_model=PaginatedResponse, status_code=200)
 async def list_jobs(
     db: AsyncSession = Depends(get_db),
     current_user=Depends(get_current_user),
@@ -81,6 +81,13 @@ async def list_jobs(
     source_portal: Optional[str] = None,
     sort: str = Query("-created_at"),
 ):
+    """
+    List jobs with pagination and optional filters.
+
+    **Query params:** page, per_page, status, company_name, source_portal, sort
+    **Response:** PaginatedResponse (items, total, page, per_page, pages)
+    **Errors:** 401 (unauthorized)
+    """
     base_query = select(Job).where(Job.user_id == current_user.id, Job.is_deleted.is_(False))
     if status:
         base_query = base_query.where(Job.status == status)
@@ -110,6 +117,13 @@ async def create_job(
     db: AsyncSession = Depends(get_db),
     current_user=Depends(get_current_user),
 ) -> JobOut:
+    """
+    Create a new job in the pipeline.
+
+    **Request:** JobCreate (company, role, jd_text, status, etc.)
+    **Response:** JobOut
+    **Errors:** 409 (duplicate job), 401 (unauthorized)
+    """
     existing = await db.execute(
         select(Job).where(
             Job.user_id == current_user.id,
@@ -153,13 +167,19 @@ async def create_job(
 
 # --- FIXED-PATH ENDPOINTS (MUST be before /{job_id}) ---
 
-@router.get("/pipeline")
+@router.get("/pipeline", status_code=200)
 async def get_pipeline(
     db: AsyncSession = Depends(get_db),
     current_user=Depends(get_current_user),
     limit_per_status: int = 50,
 ):
-    """Get pipeline view with jobs grouped by status. Paginated per status."""
+    """
+    Get pipeline view with jobs grouped by status.
+
+    Returns jobs in Tracking, Applied, Interview, Offer, Closed. Limit per status configurable.
+    **Response:** dict with status keys and JobOut arrays
+    **Errors:** 401 (unauthorized)
+    """
     pipeline: dict[str, list] = {}
     for status in ["Tracking", "Applied", "Interview", "Offer", "Closed"]:
         result = await db.execute(
@@ -176,12 +196,17 @@ async def get_pipeline(
     return pipeline
 
 
-@router.get("/stale")
+@router.get("/stale", status_code=200)
 async def get_stale_jobs(
     db: AsyncSession = Depends(get_db),
     current_user=Depends(get_current_user),
 ):
-    """Jobs in 'Applied' or 'Tracking' status where updated_at is 14+ days ago."""
+    """
+    Get jobs needing follow-up (Applied/Tracking, 14+ days since update).
+
+    **Response:** {stale_jobs: [...], count: int}
+    **Errors:** 401 (unauthorized)
+    """
     fourteen_days_ago = datetime.now(timezone.utc) - timedelta(days=14)
     query = select(Job).where(
         Job.user_id == current_user.id,
@@ -207,13 +232,21 @@ async def get_stale_jobs(
     return {"stale_jobs": stale_list, "count": len(stale_list)}
 
 
-@router.get("/followups/due")
+@router.get("/followups/due", status_code=200)
 async def get_due_followups(
     days: int = Query(default=7, ge=1, le=30),
     db: AsyncSession = Depends(get_db),
     current_user=Depends(get_current_user),
 ):
-    """Get jobs and contacts with followups due. Jobs: explicit followup_date plus auto-derived (Applied >7d, Interview >3d). Contacts: follow_up_date <= today."""
+    """
+    Get jobs and contacts with follow-ups due today or overdue.
+
+    Jobs: explicit followup_date or auto-derived (Applied >7d, Interview >3d).
+    Contacts: follow_up_date <= today.
+    **Query params:** days (1-30)
+    **Response:** {jobs: [...], contacts: [...]}
+    **Errors:** 401 (unauthorized)
+    """
     now = datetime.now(timezone.utc)
     today = now.date()
     seven_days_ago = today - timedelta(days=7)
@@ -310,12 +343,17 @@ async def get_due_followups(
     }
 
 
-@router.get("/followups")
+@router.get("/followups", status_code=200)
 async def get_followups(
     db: AsyncSession = Depends(get_db),
     current_user=Depends(get_current_user),
 ):
-    """Tiered follow-up system: 7-day, 14-day, 21-day."""
+    """
+    Get tiered follow-up recommendations (7-day, 14-day, 21-day buckets).
+
+    **Response:** {day_7: [...], day_14: [...], day_21: [...], total_needing_action: int}
+    **Errors:** 401 (unauthorized)
+    """
     now = datetime.now(timezone.utc)
     jobs = (
         await db.execute(
@@ -368,7 +406,7 @@ async def get_followups(
     }
 
 
-@router.post("/analyze-jd")
+@router.post("/analyze-jd", status_code=200)
 @limiter.limit("50/hour")
 async def analyze_jd_endpoint(
     request: Request,
@@ -376,7 +414,14 @@ async def analyze_jd_endpoint(
     db: AsyncSession = Depends(get_db),
     current_user=Depends(get_current_user),
 ):
-    """Analyze a JD against user profile. Returns analysis only, does NOT create a Job."""
+    """
+    Analyze job description against user profile. Does NOT create a job.
+
+    Can extract JD from URL if jd_url provided. Returns fit/ATS scores, cover letter draft, etc.
+    **Request:** JDAnalyzeRequest (jd_text or jd_url)
+    **Response:** {analysis, company_name, role_title, jd_url, extracted_from_url}
+    **Errors:** 400 (invalid input), 503 (AI unavailable)
+    """
     jd_text = payload.jd_text or ""
     extracted_from_url = False
 
@@ -583,7 +628,7 @@ async def save_from_analysis(
     return JobOut.model_validate(job)
 
 
-@router.post("/deep-resume-analysis")
+@router.post("/deep-resume-analysis", status_code=200)
 @limiter.limit("50/hour")
 async def deep_resume_analysis_endpoint(
     request: Request,
@@ -591,7 +636,14 @@ async def deep_resume_analysis_endpoint(
     db: AsyncSession = Depends(get_db),
     current_user=Depends(get_current_user),
 ):
-    """Deep resume vs JD analysis with specific rewrite suggestions."""
+    """
+    Deep resume vs JD analysis with specific rewrite suggestions.
+
+    Requires resume uploaded to profile. Optionally stores analysis on job_id.
+    **Request:** DeepResumeAnalysisRequest (jd_text, job_id?)
+    **Response:** {analysis: {...}, job_id?: str}
+    **Errors:** 400 (invalid jd_text or no resume), 502/503 (AI unavailable)
+    """
     if not (100 <= len(payload.jd_text) <= 15000):
         raise HTTPException(status_code=400, detail="jd_text must be between 100 and 15000 characters")
 
@@ -637,13 +689,20 @@ async def deep_resume_analysis_endpoint(
     return {"analysis": analysis, "job_id": payload.job_id}
 
 
-@router.get("/search")
+@router.get("/search", status_code=200)
 async def global_search(
     q: str,
     types: str = "jobs,companies,contacts",
     db: AsyncSession = Depends(get_db),
     current_user=Depends(get_current_user),
 ):
+    """
+    Search across jobs, companies, and contacts by name/title.
+
+    **Query params:** q (search term), types (comma-separated: jobs,companies,contacts)
+    **Response:** {jobs: [...], companies: [...], contacts: [...]}
+    **Errors:** 401 (unauthorized)
+    """
     types_set = {t.strip() for t in types.split(",")}
     results: dict[str, list[dict[str, Any]]] = {"jobs": [], "companies": [], "contacts": []}
 
@@ -698,21 +757,34 @@ async def global_search(
 
 # --- PARAMETRIC ENDPOINTS (MUST be after fixed-path endpoints) ---
 
-@router.get("/{job_id}", response_model=JobOut)
+@router.get("/{job_id}", response_model=JobOut, status_code=200)
 async def get_job(job_id: str, db: AsyncSession = Depends(get_db), current_user=Depends(get_current_user)) -> JobOut:
+    """
+    Get a single job by ID.
+
+    **Response:** JobOut
+    **Errors:** 404 (job not found), 401 (unauthorized)
+    """
     job = await db.get(Job, job_id)
     if job is None or job.user_id != current_user.id or job.is_deleted:
         raise HTTPException(status_code=404, detail="Job not found")
     return JobOut.model_validate(job)
 
 
-@router.patch("/{job_id}", response_model=JobOut)
+@router.patch("/{job_id}", response_model=JobOut, status_code=200)
 async def update_job(
     job_id: str,
     payload: JobUpdate,
     db: AsyncSession = Depends(get_db),
     current_user=Depends(get_current_user),
 ) -> JobOut:
+    """
+    Update a job. Supports partial updates.
+
+    **Request:** JobUpdate (partial fields)
+    **Response:** JobOut
+    **Errors:** 400 (invalid closed_reason), 404 (job not found), 401 (unauthorized)
+    """
     job = await db.get(Job, job_id)
     if job is None or job.user_id != current_user.id or job.is_deleted:
         raise HTTPException(status_code=404, detail="Job not found")
@@ -768,8 +840,14 @@ async def update_job(
     return JobOut.model_validate(job)
 
 
-@router.delete("/{job_id}")
+@router.delete("/{job_id}", status_code=200)
 async def delete_job(job_id: str, db: AsyncSession = Depends(get_db), current_user=Depends(get_current_user)) -> dict:
+    """
+    Soft-delete a job.
+
+    **Response:** {status: "deleted"}
+    **Errors:** 404 (job not found), 401 (unauthorized)
+    """
     job = await db.get(Job, job_id)
     if job is None or job.user_id != current_user.id or job.is_deleted:
         raise HTTPException(status_code=404, detail="Job not found")
@@ -778,14 +856,20 @@ async def delete_job(job_id: str, db: AsyncSession = Depends(get_db), current_us
     return {"status": "deleted"}
 
 
-@router.patch("/{job_id}/followup")
+@router.patch("/{job_id}/followup", status_code=200)
 async def log_followup(
     job_id: str,
     payload: FollowupAction,
     db: AsyncSession = Depends(get_db),
     current_user=Depends(get_current_user),
 ):
-    """Log that a follow-up was sent."""
+    """
+    Log that a follow-up was sent. Updates last_followup_date and followup_count.
+
+    **Request:** FollowupAction (notes?)
+    **Response:** {id, company, role, last_followup_date, followup_count}
+    **Errors:** 404 (job not found), 401 (unauthorized)
+    """
     job = await db.get(Job, job_id)
     if job is None or job.user_id != current_user.id or job.is_deleted:
         raise HTTPException(status_code=404, detail="Job not found")
@@ -820,14 +904,20 @@ async def log_followup(
     }
 
 
-@router.post("/{job_id}/notes")
+@router.post("/{job_id}/notes", status_code=200)
 async def add_note(
     job_id: str,
     payload: AddNoteRequest,
     db: AsyncSession = Depends(get_db),
     current_user=Depends(get_current_user),
 ):
-    """Add a note to a job's notes JSONB array."""
+    """
+    Add a note to a job's notes array.
+
+    **Request:** AddNoteRequest (text)
+    **Response:** {notes: [...]}
+    **Errors:** 404 (job not found), 401 (unauthorized)
+    """
     job = await db.get(Job, job_id)
     if job is None or job.user_id != current_user.id or job.is_deleted:
         raise HTTPException(status_code=404, detail="Job not found")
@@ -844,7 +934,7 @@ async def add_note(
     return {"notes": job.notes}
 
 
-@router.post("/{job_id}/reanalyze")
+@router.post("/{job_id}/reanalyze", status_code=200)
 @limiter.limit("20/hour")
 async def reanalyze_job(
     request: Request,
@@ -852,7 +942,12 @@ async def reanalyze_job(
     db: AsyncSession = Depends(get_db),
     current_user=Depends(get_current_user),
 ):
-    """Re-analyze a job with current profile/resume."""
+    """
+    Re-analyze job with current profile and resume.
+
+    **Response:** {message, fit_score, keywords_matched, keywords_missing}
+    **Errors:** 400 (no JD text), 404 (job not found), 503 (AI unavailable)
+    """
     job = await db.get(Job, job_id)
     if not job or job.user_id != current_user.id or job.is_deleted:
         raise HTTPException(status_code=404, detail="Job not found")
@@ -934,14 +1029,20 @@ async def reanalyze_job(
     }
 
 
-@router.post("/{job_id}/interview")
+@router.post("/{job_id}/interview", status_code=201)
 async def schedule_interview(
     job_id: str,
     payload: InterviewCreate,
     db: AsyncSession = Depends(get_db),
     current_user=Depends(get_current_user),
 ):
-    """Schedule an interview for a job."""
+    """
+    Schedule an interview for a job.
+
+    **Request:** InterviewCreate (interview_date, round, interviewer_name, etc.)
+    **Response:** {id, job_id, company, role, interview_date, round, status, ...}
+    **Errors:** 404 (job not found), 401 (unauthorized)
+    """
     job = await db.get(Job, job_id)
     if job is None or job.user_id != current_user.id or job.is_deleted:
         raise HTTPException(status_code=404, detail="Job not found")
@@ -987,14 +1088,20 @@ async def schedule_interview(
     }
 
 
-@router.post("/{job_id}/debrief")
+@router.post("/{job_id}/debrief", status_code=200)
 async def log_debrief(
     job_id: str,
     payload: DebriefCreate,
     db: AsyncSession = Depends(get_db),
     current_user=Depends(get_current_user),
 ):
-    """Log debrief after an interview."""
+    """
+    Log interview debrief (rating, questions, feedback).
+
+    **Request:** DebriefCreate (rating 1-10, questions_asked, went_well, to_improve, next_steps)
+    **Response:** {id, job_id, company, role, rating, status, ...}
+    **Errors:** 404 (job or interview not found), 401 (unauthorized)
+    """
     job = await db.get(Job, job_id)
     if job is None or job.user_id != current_user.id or job.is_deleted:
         raise HTTPException(status_code=404, detail="Job not found")
@@ -1044,7 +1151,7 @@ async def log_debrief(
     }
 
 
-@router.get("/{job_id}/prep")
+@router.get("/{job_id}/prep", status_code=200)
 @limiter.limit("50/hour")
 async def get_interview_prep(
     request: Request,
@@ -1052,7 +1159,12 @@ async def get_interview_prep(
     db: AsyncSession = Depends(get_db),
     current_user=Depends(get_current_user),
 ):
-    """Generate AI interview prep. Cached for 48 hours."""
+    """
+    Generate AI interview prep. Cached for 48 hours.
+
+    **Response:** {prep: str, cached: bool, generated_at: str}
+    **Errors:** 404 (job not found), 503 (AI unavailable)
+    """
     job = await db.get(Job, job_id)
     if job is None or job.user_id != current_user.id or job.is_deleted:
         raise HTTPException(status_code=404, detail="Job not found")

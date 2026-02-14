@@ -4,6 +4,18 @@ from pydantic import BaseModel, ConfigDict, Field
 
 
 class ProfileUpdate(BaseModel):
+    model_config = ConfigDict(
+        json_schema_extra={
+            "examples": [
+                {
+                    "full_name": "Jane Doe",
+                    "positioning_statement": "Growth PM with 8+ years in consumer tech",
+                    "target_roles": ["Senior PM", "Head of Product"],
+                    "core_skills": ["Product Strategy", "Data Analysis"],
+                }
+            ]
+        }
+    )
     full_name: Optional[str] = None
     positioning_statement: Optional[str] = None
     target_roles: Optional[list[str]] = None
@@ -27,12 +39,34 @@ class ProfileUpdate(BaseModel):
 
 
 class ProfileExtractRequest(BaseModel):
+    model_config = ConfigDict(
+        json_schema_extra={
+            "examples": [
+                {
+                    "resume_text": "JANE DOE\nSenior Product Manager\n\nEXPERIENCE\nAcme Corp (2020-Present)...",
+                }
+            ]
+        }
+    )
     resume_text: str = Field(..., min_length=500)
 
 
 class ProfileOut(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
-
+    model_config = ConfigDict(
+        from_attributes=True,
+        json_schema_extra={
+            "examples": [
+                {
+                    "full_name": "Jane Doe",
+                    "positioning_statement": "Growth PM with 8+ years",
+                    "target_roles": ["Senior PM"],
+                    "core_skills": ["Product Strategy"],
+                    "experience_level": "Senior",
+                    "years_of_experience": 8,
+                }
+            ]
+        },
+    )
     full_name: Optional[str] = None
     positioning_statement: Optional[str] = None
     target_roles: Optional[list[str]] = None

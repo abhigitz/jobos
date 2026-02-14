@@ -46,6 +46,16 @@ async def register_user(
     payload: RegisterRequest,
     db: AsyncSession = Depends(get_db),
 ) -> UserOut:
+    """
+    Register a new user account.
+
+    Creates a new user with email, password, and full name. Also creates an associated
+    ProfileDNA record. Email verification is not required.
+
+    **Request:** RegisterRequest (email, password, full_name)
+    **Response:** UserOut (user details without password)
+    **Errors:** 400 (email already registered, invalid format), 500 (registration failed)
+    """
     email = payload.email.lower().strip()
     try:
         existing = await db.execute(select(User).where(func.lower(User.email) == email))
@@ -94,13 +104,23 @@ async def register_user(
         )
 
 
-@router.post("/login", response_model=TokenResponse)
+@router.post("/login", response_model=TokenResponse, status_code=status.HTTP_200_OK)
 @limiter.limit("5/minute")
 async def login(
     request: Request,
     payload: LoginRequest,
     db: AsyncSession = Depends(get_db),
 ) -> TokenResponse:
+    """
+    Authenticate and receive JWT tokens.
+
+    Returns access_token and refresh_token for API authentication.
+    Access token expires in 30 minutes; refresh token is valid for 7 days.
+
+    **Request:** LoginRequest (email, password)
+    **Response:** TokenResponse (access_token, refresh_token, token_type, expires_in)
+    **Errors:** 401 (invalid credentials)
+    """
     email = payload.email.lower().strip()
     result = await db.execute(select(User).where(func.lower(User.email) == email))
     user = result.scalar_one_or_none()
@@ -121,11 +141,19 @@ async def login(
     return TokenResponse(access_token=access_token, refresh_token=refresh_token)
 
 
-@router.post("/refresh", response_model=TokenResponse)
+@router.post("/refresh", response_model=TokenResponse, status_code=status.HTTP_200_OK)
 async def refresh_token_endpoint(
     payload: RefreshRequest,
     db: AsyncSession = Depends(get_db),
 ) -> TokenResponse:
+    """
+    Exchange refresh token for new access and refresh tokens.
+
+    Rotates refresh token (old one is invalidated). Requires valid refresh_token.
+    **Request:** RefreshRequest (refresh_token)
+    **Response:** TokenResponse (access_token, refresh_token)
+    **Errors:** 401 (invalid or expired refresh token)
+    """
     from app.auth.jwt_handler import verify_token
 
     token = payload.refresh_token
@@ -170,33 +198,62 @@ async def refresh_token_endpoint(
     return TokenResponse(access_token=new_access, refresh_token=new_refresh)
 
 
-@router.get("/me", response_model=UserOut)
+@router.get("/me", response_model=UserOut, status_code=status.HTTP_200_OK)
 async def get_me(current_user: User = Depends(get_current_user)) -> UserOut:
+    """
+    Get current authenticated user details.
+
+    Requires Bearer token in Authorization header.
+    **Response:** UserOut (id, email, full_name, is_active, etc.)
+    **Errors:** 401 (unauthorized)
+    """
     return UserOut.model_validate(current_user)
 
 
-@router.post("/verify-email", response_model=MessageResponse)
+@router.post("/verify-email", response_model=MessageResponse, status_code=status.HTTP_200_OK)
 async def verify_email(payload: VerifyEmailRequest, db: AsyncSession = Depends(get_db)) -> MessageResponse:
-    """No-op: email verification is no longer required. Please log in."""
+    """
+    Verify email address (legacy/no-op).
+
+    Email verification is no longer required. Returns success message.
+    **Request:** VerifyEmailRequest (token, email)
+    **Response:** MessageResponse
+    """
     return MessageResponse(message="Email verification is no longer required. Please log in.")
 
 
-@router.post("/resend-verification", response_model=MessageResponse)
+@router.post("/resend-verification", response_model=MessageResponse, status_code=status.HTTP_200_OK)
 async def resend_verification(
     payload: ResendVerificationRequest, db: AsyncSession = Depends(get_db)
 ) -> MessageResponse:
-    """No-op: email verification is no longer required. Returns success immediately."""
+    """
+    Resend verification email (legacy/no-op).
+
+    Returns success message regardless of account existence (security).
+    **Request:** ResendVerificationRequest (email)
+    **Response:** MessageResponse
+    """
     return MessageResponse(message="If an account exists with that email, a verification link has been sent.")
 
 
-@router.post("/forgot-password", response_model=MessageResponse)
+@router.post("/forgot-password", response_model=MessageResponse, status_code=status.HTTP_200_OK)
 @limiter.limit("3/hour")
 async def forgot_password(
     request: Request,
     payload: ForgotPasswordRequest,
     db: AsyncSession = Depends(get_db),
 ) -> MessageResponse:
-    generic = MessageResponse(message="If an account exists with that email, a password reset link has been sent.")
+    """
+    Request password reset email.
+
+    Sends reset link to email if account exists. Always returns same message for security.
+    Rate limited to 3 requests per hour per IP.
+    **Request:** ForgotPasswordRequest (email)
+    **Response:** MessageResponse
+    """
+    generic = MessageResponse(
+        message="If an account exists with that email, a password reset link has been sent."
+    )
 
     email = payload.email.lower().strip()
     result = await db.execute(select(User).where(func.lower(User.email) == email))
@@ -229,13 +286,21 @@ async def forgot_password(
     return generic
 
 
-@router.post("/reset-password", response_model=MessageResponse)
+@router.post("/reset-password", response_model=MessageResponse, status_code=status.HTTP_200_OK)
 @limiter.limit("3/hour")
 async def reset_password(
     request: Request,
     payload: ResetPasswordRequest,
     db: AsyncSession = Depends(get_db),
 ) -> MessageResponse:
+    """
+    Reset password using token from email.
+
+    Invalidates the reset token and all refresh tokens for the user.
+    **Request:** ResetPasswordRequest (token, new_password)
+    **Response:** MessageResponse
+    **Errors:** 400 (invalid or expired token)
+    """
     result = await db.execute(
         select(PasswordResetToken).where(PasswordResetToken.token == payload.token)
     )

@@ -16,6 +16,17 @@ def validate_password_strength(v: str) -> str:
 
 
 class RegisterRequest(BaseModel):
+    model_config = ConfigDict(
+        json_schema_extra={
+            "examples": [
+                {
+                    "email": "jane@example.com",
+                    "password": "SecurePass123",
+                    "full_name": "Jane Doe",
+                }
+            ]
+        }
+    )
     email: EmailStr = Field(..., max_length=255)
     password: str = Field(..., min_length=8, max_length=128)
     full_name: str = Field(..., max_length=255)
@@ -32,6 +43,13 @@ class RegisterRequest(BaseModel):
 
 
 class LoginRequest(BaseModel):
+    model_config = ConfigDict(
+        json_schema_extra={
+            "examples": [
+                {"email": "jane@example.com", "password": "SecurePass123"}
+            ]
+        }
+    )
     email: str
     password: str
 
@@ -46,6 +64,18 @@ class RefreshRequest(BaseModel):
 
 
 class TokenResponse(BaseModel):
+    model_config = ConfigDict(
+        json_schema_extra={
+            "examples": [
+                {
+                    "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+                    "refresh_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+                    "token_type": "bearer",
+                    "expires_in": 1800,
+                }
+            ]
+        }
+    )
     access_token: str
     refresh_token: str
     token_type: str = "bearer"
@@ -53,8 +83,22 @@ class TokenResponse(BaseModel):
 
 
 class UserOut(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
-
+    model_config = ConfigDict(
+        from_attributes=True,
+        json_schema_extra={
+            "examples": [
+                {
+                    "id": "550e8400-e29b-41d4-a716-446655440000",
+                    "email": "jane@example.com",
+                    "full_name": "Jane Doe",
+                    "is_active": True,
+                    "onboarding_completed": False,
+                    "telegram_chat_id": None,
+                    "email_verified": True,
+                }
+            ]
+        },
+    )
     id: UUID
     email: str
     full_name: Optional[str] = None

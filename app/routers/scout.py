@@ -41,23 +41,34 @@ router = APIRouter()
 
 # --- Job scouting preferences ---
 
-@router.get("/preferences", response_model=UserScoutPreferencesOut)
+@router.get("/preferences", response_model=UserScoutPreferencesOut, status_code=200)
 async def get_scout_preferences(
     db: AsyncSession = Depends(get_db),
     current_user=Depends(get_current_user),
 ):
-    """Get user's scout preferences. Auto-create from profile_dna if missing."""
+    """
+    Get user's scout preferences. Auto-create from profile_dna if missing.
+
+    **Response:** UserScoutPreferencesOut
+    **Errors:** 401 (unauthorized)
+    """
     prefs = await get_or_create_preferences(db, current_user.id)
     return UserScoutPreferencesOut.model_validate(prefs)
 
 
-@router.put("/preferences", response_model=UserScoutPreferencesOut)
+@router.put("/preferences", response_model=UserScoutPreferencesOut, status_code=200)
 async def update_scout_preferences(
     payload: UserScoutPreferencesUpdate,
     db: AsyncSession = Depends(get_db),
     current_user=Depends(get_current_user),
 ):
-    """Update user's scout preferences."""
+    """
+    Update user's scout preferences.
+
+    **Request:** UserScoutPreferencesUpdate
+    **Response:** UserScoutPreferencesOut
+    **Errors:** 401 (unauthorized)
+    """
     prefs = await get_or_create_preferences(db, current_user.id)
     update_data = payload.model_dump(exclude_unset=True)
     for key, value in update_data.items():
@@ -67,12 +78,17 @@ async def update_scout_preferences(
     return UserScoutPreferencesOut.model_validate(prefs)
 
 
-@router.post("/preferences/sync-from-profile", response_model=UserScoutPreferencesOut)
+@router.post("/preferences/sync-from-profile", response_model=UserScoutPreferencesOut, status_code=200)
 async def sync_preferences_from_profile_endpoint(
     db: AsyncSession = Depends(get_db),
     current_user=Depends(get_current_user),
 ):
-    """Sync preferences from profile_dna."""
+    """
+    Sync scout preferences from profile_dna.
+
+    **Response:** UserScoutPreferencesOut
+    **Errors:** 401 (unauthorized)
+    """
     synced = await sync_preferences_from_profile(db, current_user.id)
     if synced is None:
         # No preferences exist - create from profile
@@ -83,7 +99,7 @@ async def sync_preferences_from_profile_endpoint(
 
 # --- Scouted jobs ---
 
-@router.get("/jobs")
+@router.get("/jobs", status_code=200)
 async def get_scouted_jobs(
     status: Optional[str] = Query(None, description="Filter: new, viewed, saved, dismissed"),
     min_score: int = Query(30, ge=0, description="Minimum relevance score"),
@@ -92,7 +108,13 @@ async def get_scouted_jobs(
     db: AsyncSession = Depends(get_db),
     current_user=Depends(get_current_user),
 ):
-    """Get scouted jobs for user with filtering. Returns paginated list."""
+    """
+    Get scouted jobs with filtering. Paginated.
+
+    **Query params:** status, min_score, limit, offset
+    **Response:** {items: [...], total, limit, offset}
+    **Errors:** 401 (unauthorized)
+    """
     query = (
         select(UserScoutedJob)
         .where(
@@ -143,13 +165,18 @@ async def get_scouted_jobs(
     return {"items": items, "total": total, "limit": limit, "offset": offset}
 
 
-@router.post("/jobs/{scouted_job_id}/view")
+@router.post("/jobs/{scouted_job_id}/view", status_code=200)
 async def mark_job_viewed(
     scouted_job_id: UUID,
     db: AsyncSession = Depends(get_db),
     current_user=Depends(get_current_user),
 ):
-    """Mark job as viewed."""
+    """
+    Mark scouted job as viewed.
+
+    **Response:** {status: "success"}
+    **Errors:** 404 (scouted job not found), 401 (unauthorized)
+    """
     result = await db.execute(
         select(UserScoutedJob).where(
             UserScoutedJob.id == scouted_job_id,
@@ -166,13 +193,18 @@ async def mark_job_viewed(
     return {"status": "success"}
 
 
-@router.post("/jobs/{scouted_job_id}/save")
+@router.post("/jobs/{scouted_job_id}/save", status_code=200)
 async def save_job(
     scouted_job_id: UUID,
     db: AsyncSession = Depends(get_db),
     current_user=Depends(get_current_user),
 ):
-    """Save job for later."""
+    """
+    Save scouted job for later.
+
+    **Response:** {status: "success"}
+    **Errors:** 404 (scouted job not found), 401 (unauthorized)
+    """
     result = await db.execute(
         select(UserScoutedJob).where(
             UserScoutedJob.id == scouted_job_id,
@@ -189,14 +221,20 @@ async def save_job(
     return {"status": "success"}
 
 
-@router.post("/jobs/{scouted_job_id}/dismiss")
+@router.post("/jobs/{scouted_job_id}/dismiss", status_code=200)
 async def dismiss_job(
     scouted_job_id: UUID,
     body: DismissRequest,
     db: AsyncSession = Depends(get_db),
     current_user=Depends(get_current_user),
 ):
-    """Dismiss job with reason. Applies learning to preferences."""
+    """
+    Dismiss scouted job with reason. Applies learning to preferences.
+
+    **Request:** DismissRequest (reason)
+    **Response:** {status: "success"}
+    **Errors:** 404 (scouted job not found), 401 (unauthorized)
+    """
     result = await db.execute(
         select(UserScoutedJob)
         .where(
@@ -224,13 +262,18 @@ async def dismiss_job(
     return {"status": "success"}
 
 
-@router.post("/jobs/{scouted_job_id}/to-pipeline", response_model=JobOut)
+@router.post("/jobs/{scouted_job_id}/to-pipeline", response_model=JobOut, status_code=201)
 async def add_job_to_pipeline(
     scouted_job_id: UUID,
     db: AsyncSession = Depends(get_db),
     current_user=Depends(get_current_user),
 ):
-    """Add scouted job to main pipeline."""
+    """
+    Add scouted job to main jobs pipeline.
+
+    **Response:** JobOut
+    **Errors:** 400 (already in pipeline), 404 (scouted job not found), 401 (unauthorized)
+    """
     result = await db.execute(
         select(UserScoutedJob)
         .where(
@@ -292,12 +335,17 @@ async def add_job_to_pipeline(
     return JobOut.model_validate(new_job)
 
 
-@router.get("/stats", response_model=ScoutStatsOut)
+@router.get("/stats", response_model=ScoutStatsOut, status_code=200)
 async def get_scout_stats(
     db: AsyncSession = Depends(get_db),
     current_user=Depends(get_current_user),
 ):
-    """Return scout stats: new_count, viewed_count, saved_count, dismissed_count, added_to_pipeline_count."""
+    """
+    Get scout stats (new, viewed, saved, dismissed, added_to_pipeline counts).
+
+    **Response:** ScoutStatsOut
+    **Errors:** 401 (unauthorized)
+    """
     base = select(UserScoutedJob).where(UserScoutedJob.user_id == current_user.id)
 
     async def _count(cond):
@@ -322,7 +370,7 @@ async def get_scout_stats(
 
 # --- Legacy scout results (ScoutResult model) ---
 
-@router.get("/results", response_model=ScoutResultsPage)
+@router.get("/results", response_model=ScoutResultsPage, status_code=200)
 async def list_scout_results(
     status: Optional[str] = Query(None, description="Filter by status: new, reviewed, promoted, dismissed"),
     page: int = Query(1, ge=1),
@@ -330,7 +378,13 @@ async def list_scout_results(
     db: AsyncSession = Depends(get_db),
     current_user=Depends(get_current_user),
 ):
-    """List scout results with optional status filter."""
+    """
+    List legacy scout results with optional status filter.
+
+    **Query params:** status, page, per_page
+    **Response:** ScoutResultsPage
+    **Errors:** 401 (unauthorized)
+    """
     query = select(ScoutResult).where(
         ScoutResult.user_id == current_user.id,
     ).order_by(ScoutResult.created_at.desc())
@@ -354,22 +408,32 @@ async def list_scout_results(
     )
 
 
-@router.post("/run", response_model=ScoutRunSummary)
+@router.post("/run", response_model=ScoutRunSummary, status_code=200)
 async def trigger_scout_run(
     current_user=Depends(get_current_user),
 ):
-    """Manually trigger a scout run for the current user."""
+    """
+    Manually trigger a scout run for the current user.
+
+    **Response:** ScoutRunSummary
+    **Errors:** 401 (unauthorized)
+    """
     summary = await run_scout(user_id=str(current_user.id))
     return ScoutRunSummary(**summary)
 
 
-@router.post("/results/{scout_id}/promote")
+@router.post("/results/{scout_id}/promote", status_code=200)
 async def promote_scout_result(
     scout_id: UUID,
     db: AsyncSession = Depends(get_db),
     current_user=Depends(get_current_user),
 ):
-    """Manually promote a scout result to the jobs pipeline."""
+    """
+    Promote legacy scout result to jobs pipeline.
+
+    **Response:** {status: "promoted", job_id: str}
+    **Errors:** 400 (already promoted), 404 (not found), 401 (unauthorized)
+    """
     result = await db.execute(
         select(ScoutResult).where(
             ScoutResult.id == scout_id,
@@ -414,13 +478,18 @@ async def promote_scout_result(
     return {"status": "promoted", "job_id": str(new_job.id)}
 
 
-@router.post("/results/{scout_id}/dismiss")
+@router.post("/results/{scout_id}/dismiss", status_code=200)
 async def dismiss_scout_result(
     scout_id: UUID,
     db: AsyncSession = Depends(get_db),
     current_user=Depends(get_current_user),
 ):
-    """Mark a scout result as dismissed (not relevant)."""
+    """
+    Mark legacy scout result as dismissed.
+
+    **Response:** {status: "dismissed"}
+    **Errors:** 404 (not found), 401 (unauthorized)
+    """
     result = await db.execute(
         select(ScoutResult).where(
             ScoutResult.id == scout_id,
@@ -437,10 +506,15 @@ async def dismiss_scout_result(
     return {"status": "dismissed"}
 
 
-@router.post("/run-now")
+@router.post("/run-now", status_code=200)
 async def run_now(
     current_user=Depends(get_current_user),
 ):
-    """Manually trigger the job scout task (SerpAPI fetch, upsert, matching)."""
+    """
+    Manually trigger job scout task (SerpAPI fetch, upsert, matching).
+
+    **Response:** {status: "completed", result: {...}}
+    **Errors:** 401 (unauthorized)
+    """
     result = await run_job_scout()
     return {"status": "completed", "result": result}

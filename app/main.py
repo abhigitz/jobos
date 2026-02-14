@@ -7,7 +7,9 @@ from pathlib import Path
 
 import sentry_sdk
 from app.config import get_settings
-from fastapi import Depends, FastAPI, HTTPException
+from fastapi import Depends, FastAPI, HTTPException, Request
+from fastapi.exceptions import RequestValidationError
+from starlette.responses import JSONResponse
 
 settings = get_settings()
 if settings.sentry_dsn:
@@ -221,6 +223,32 @@ api_v1.include_router(search.router)
 
 # Mount v1 router
 app.include_router(api_v1)
+
+
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    """Return validation errors with a user-friendly message for the first error."""
+    errors = exc.errors()
+    # Build a simple message from the first error for frontend display
+    message = "Validation failed"
+    if errors:
+        first = errors[0]
+        msg = first.get("msg", "Invalid input")
+        loc = first.get("loc", ())
+        if len(loc) >= 2:
+            field = str(loc[-1])
+            message = f"{field}: {msg}"
+        else:
+            message = msg
+    logger.warning(
+        "Request validation error: path=%s errors=%s",
+        request.url.path,
+        errors,
+    )
+    return JSONResponse(
+        status_code=422,
+        content={"detail": errors, "message": message},
+    )
 
 
 @app.exception_handler(Exception)

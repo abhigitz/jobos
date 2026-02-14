@@ -1,11 +1,12 @@
 import logging
 import secrets
+import traceback
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy import delete, func, select
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy.exc import IntegrityError, OperationalError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth import (
@@ -54,17 +55,41 @@ async def register_user(
 
     **Request:** RegisterRequest (email, password, full_name)
     **Response:** UserOut (user details without password)
-    **Errors:** 400 (email already registered, invalid format), 500 (registration failed)
+    **Errors:** 400 (email already registered, invalid format), 422 (validation errors), 500 (registration failed)
     """
     email = payload.email.lower().strip()
+    logger.info(
+        "Registration attempt: email=%s full_name=%s",
+        email,
+        payload.full_name[:20] + "..." if len(payload.full_name or "") > 20 else (payload.full_name or ""),
+    )
     try:
+        # Check email uniqueness before insert
         existing = await db.execute(select(User).where(func.lower(User.email) == email))
         if existing.scalar_one_or_none() is not None:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Email already registered")
+            logger.info("Registration rejected: email already registered: %s", email)
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Email already registered",
+            )
+
+        # Hash password (can raise on invalid input, but Pydantic validates first)
+        try:
+            hashed = hash_password(payload.password)
+        except Exception as hash_err:
+            logger.exception(
+                "Registration password hashing failed: email=%s error=%s",
+                email,
+                hash_err,
+            )
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Registration failed, please try again",
+            )
 
         user = User(
             email=email,
-            hashed_password=hash_password(payload.password),
+            hashed_password=hashed,
             full_name=payload.full_name,
             email_verified=True,
         )
@@ -77,27 +102,64 @@ async def register_user(
         await db.commit()
         await db.refresh(user)
 
+        logger.info("Registration success: user_id=%s email=%s", user.id, email)
         return UserOut.model_validate(user)
+
     except HTTPException:
         raise
     except IntegrityError as e:
         await db.rollback()
         err_msg = str(getattr(e, "orig", e)).lower()
-        if "unique" in err_msg or "duplicate" in err_msg:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Email already registered")
-        logger.exception("Registration integrity error: %s", e)
+        logger.warning(
+            "Registration IntegrityError: email=%s err_msg=%s orig=%s",
+            email,
+            err_msg,
+            repr(getattr(e, "orig", e)),
+        )
+        if "unique" in err_msg or "duplicate" in err_msg or "already exists" in err_msg:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Email already registered",
+            )
+        logger.exception("Registration integrity error (unexpected): %s", e)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Registration failed, please try again",
         )
+    except OperationalError as e:
+        await db.rollback()
+        logger.exception(
+            "Registration database connection error: email=%s error=%s",
+            email,
+            str(e),
+        )
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Service temporarily unavailable. Please try again later.",
+        )
     except ValueError as e:
         await db.rollback()
-        if "email" in str(e).lower() or "invalid" in str(e).lower():
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid email format")
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        err_str = str(e).lower()
+        logger.warning("Registration ValueError: email=%s error=%s", email, e)
+        if "email" in err_str or "invalid" in err_str:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invalid email format",
+            )
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e),
+        )
     except Exception as e:
         await db.rollback()
-        logger.exception("Registration failed: %s", e)
+        tb = traceback.format_exc()
+        logger.exception(
+            "Registration failed (unhandled): email=%s exception=%s type=%s traceback=%s",
+            email,
+            str(e),
+            type(e).__name__,
+            tb,
+        )
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Registration failed, please try again",

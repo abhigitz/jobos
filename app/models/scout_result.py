@@ -5,10 +5,11 @@ from datetime import datetime
 from typing import Dict, Optional
 
 from sqlalchemy import Boolean, CheckConstraint, DateTime, Float, ForeignKey, String, Text, func
-from sqlalchemy.dialects.postgresql import JSONB, UUID
+from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from .base import Base, IDMixin, TimestampMixin
+from .types import JSONBCompat
 
 
 class ScoutResult(Base, IDMixin, TimestampMixin):
@@ -25,7 +26,7 @@ class ScoutResult(Base, IDMixin, TimestampMixin):
     snippet: Mapped[Optional[str]] = mapped_column(Text)
     salary_raw: Mapped[Optional[str]] = mapped_column(String(200))
     posted_date_raw: Mapped[Optional[str]] = mapped_column(String(100))
-    normalized_data: Mapped[Optional[Dict]] = mapped_column(JSONB)
+    normalized_data: Mapped[Optional[Dict]] = mapped_column(JSONBCompat())
     fit_score: Mapped[Optional[float]] = mapped_column(Float)
     b2c_validated: Mapped[bool] = mapped_column(Boolean, default=False)
     ai_reasoning: Mapped[Optional[str]] = mapped_column(Text)

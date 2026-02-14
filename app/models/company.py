@@ -5,10 +5,11 @@ from datetime import datetime
 from typing import List, Optional
 
 from sqlalchemy import Boolean, CheckConstraint, DateTime, ForeignKey, Integer, String, Text
-from sqlalchemy.dialects.postgresql import ARRAY, UUID
+from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from .base import Base, IDMixin, TimestampMixin
+from .types import StringArray
 
 
 class Company(Base, IDMixin, TimestampMixin):
@@ -29,7 +30,7 @@ class Company(Base, IDMixin, TimestampMixin):
     last_researched: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
     deep_dive_done: Mapped[bool] = mapped_column(Boolean, default=False)
     deep_dive_content: Mapped[Optional[str]] = mapped_column(Text)
-    investors: Mapped[Optional[List[str]]] = mapped_column(ARRAY(String))
+    investors: Mapped[Optional[List[str]]] = mapped_column(StringArray())
     is_excluded: Mapped[bool] = mapped_column(Boolean, default=False)
     notes: Mapped[Optional[str]] = mapped_column(Text)
 

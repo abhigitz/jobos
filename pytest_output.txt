@@ -1,0 +1,76 @@
+=================================================================================================== test session starts ====================================================================================================
+platform darwin -- Python 3.10.19, pytest-9.0.2, pluggy-1.6.0 -- /Users/abhinavjain/JobOS/.venv/bin/python3.10
+cachedir: .pytest_cache
+rootdir: /Users/abhinavjain/JobOS
+configfile: pytest.ini
+testpaths: tests
+plugins: anyio-4.12.1, cov-4.1.0, asyncio-1.3.0
+asyncio: mode=auto, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collected 45 items                                                                                                                                                                                                         
+
+tests/test_auth.py::test_register_success ERROR                                                                                                                                                                      [  2%]
+tests/test_auth.py::test_register_duplicate_email ERROR                                                                                                                                                              [  4%]
+tests/test_auth.py::test_register_invalid_email ERROR                                                                                                                                                                [  6%]
+tests/test_auth.py::test_login_success ERROR                                                                                                                                                                         [  8%]
+tests/test_auth.py::test_login_wrong_password ERROR                                                                                                                                                                  [ 11%]
+tests/test_auth.py::test_login_nonexistent_user ERROR                                                                                                                                                                [ 13%]
+tests/test_auth.py::test_protected_route_without_token ERROR                                                                                                                                                         [ 15%]
+tests/test_auth.py::test_protected_route_with_token ERROR                                                                                                                                                            [ 17%]
+tests/test_companies.py::TestCompanies::test_create_company ERROR                                                                                                                                                    [ 20%]
+tests/test_companies.py::TestCompanies::test_list_companies ERROR                                                                                                                                                    [ 22%]
+tests/test_companies.py::TestCompanies::test_search_companies ERROR                                                                                                                                                  [ 24%]
+tests/test_companies.py::TestCompanies::test_quick_create ERROR                                                                                                                                                      [ 26%]
+tests/test_contacts.py::TestContacts::test_create_contact ERROR                                                                                                                                                      [ 28%]
+tests/test_contacts.py::TestContacts::test_list_contacts ERROR                                                                                                                                                       [ 31%]
+tests/test_contacts.py::TestContacts::test_update_contact ERROR                                                                                                                                                      [ 33%]
+tests/test_content_studio.py::TestContentStudio::test_get_main_screen ERROR                                                                                                                                          [ 35%]
+tests/test_content_studio.py::TestContentStudio::test_get_categories ERROR                                                                                                                                           [ 37%]
+tests/test_content_studio.py::TestContentStudio::test_get_history ERROR                                                                                                                                              [ 40%]
+tests/test_edge_cases.py::TestAuthEdgeCases::test_login_with_wrong_password_returns_401 ERROR                                                                                                                        [ 42%]
+tests/test_edge_cases.py::TestAuthEdgeCases::test_login_with_nonexistent_email_returns_401 ERROR                                                                                                                     [ 44%]
+tests/test_edge_cases.py::TestAuthEdgeCases::test_register_with_invalid_email_format_returns_422 ERROR                                                                                                               [ 46%]
+tests/test_edge_cases.py::TestAuthEdgeCases::test_register_with_duplicate_email_returns_400 ERROR                                                                                                                    [ 48%]
+tests/test_edge_cases.py::TestAuthEdgeCases::test_access_protected_route_without_token_returns_401 ERROR                                                                                                             [ 51%]
+tests/test_edge_cases.py::TestAuthEdgeCases::test_access_with_expired_invalid_token_returns_401 ERROR                                                                                                                [ 53%]
+tests/test_edge_cases.py::TestJobsEdgeCases::test_create_job_with_missing_required_fields_returns_422 ERROR                                                                                                          [ 55%]
+tests/test_edge_cases.py::TestJobsEdgeCases::test_get_nonexistent_job_returns_404 ERROR                                                                                                                              [ 57%]
+tests/test_edge_cases.py::TestJobsEdgeCases::test_update_job_with_invalid_status_returns_422 ERROR                                                                                                                   [ 60%]
+tests/test_edge_cases.py::TestJobsEdgeCases::test_analyze_jd_with_empty_text_returns_400 ERROR                                                                                                                       [ 62%]
+tests/test_edge_cases.py::TestJobsEdgeCases::test_analyze_jd_with_text_under_50_chars_returns_400 ERROR                                                                                                              [ 64%]
+tests/test_edge_cases.py::TestCompaniesEdgeCases::test_create_company_with_duplicate_name_returns_409 ERROR                                                                                                          [ 66%]
+tests/test_edge_cases.py::TestCompaniesEdgeCases::test_get_nonexistent_company_returns_404 ERROR                                                                                                                     [ 68%]
+tests/test_edge_cases.py::TestCompaniesEdgeCases::test_search_with_empty_query_returns_422 ERROR                                                                                                                     [ 71%]
+tests/test_edge_cases.py::TestCompaniesEdgeCases::test_search_with_no_matches_returns_empty_list ERROR                                                                                                               [ 73%]
+tests/test_edge_cases.py::TestContactsEdgeCases::test_create_contact_with_missing_required_fields_returns_422 ERROR                                                                                                  [ 75%]
+tests/test_edge_cases.py::TestContactsEdgeCases::test_get_nonexistent_contact_returns_404 ERROR                                                                                                                      [ 77%]
+tests/test_jobs.py::TestJobs::test_create_job ERROR                                                                                                                                                                  [ 80%]
+tests/test_jobs.py::TestJobs::test_list_jobs ERROR                                                                                                                                                                   [ 82%]
+tests/test_jobs.py::TestJobs::test_get_pipeline ERROR                                                                                                                                                                [ 84%]
+tests/test_jobs.py::TestJobs::test_update_job_status ERROR                                                                                                                                                           [ 86%]
+tests/test_scout_scoring.py::test_score_exact_title_match PASSED                                                                                                                                                     [ 88%]
+tests/test_scout_scoring.py::test_score_partial_title_match FAILED                                                                                                                                                   [ 91%]
+tests/test_scout_scoring.py::test_score_no_match PASSED                                                                                                                                                              [ 93%]
+tests/test_scout_scoring.py::test_score_location_bangalore PASSED                                                                                                                                                    [ 95%]
+tests/test_scout_scoring.py::test_score_remote_job PASSED                                                                                                                                                            [ 97%]
+tests/test_scout_scoring.py::test_score_experience_level FAILED                                                                                                                                                      [100%]
+
+========================================================================================================== ERRORS ==========================================================================================================
+
+The main error affecting most tests is a SQLAlchemy compilation error related to ARRAY type in SQLite:
+
+sqlalchemy.exc.CompileError: (in table 'companies', column 'investors'): Compiler <sqlalchemy.dialects.sqlite.base.SQLiteTypeCompiler object at 0x1105881f0> can't render element of type ARRAY
+
+This error occurs because SQLite does not support the ARRAY data type natively. The 'investors' column in the 'companies' table is defined as ARRAY(String()), which is not compatible with SQLite.
+
+All tests that require database setup are failing with this error during the setup phase.
+
+Only the tests in test_scout_scoring.py that don't require database setup are running, with:
+- 4 PASSED tests
+- 2 FAILED tests
+- 39 ERROR tests (database setup failures)
+
+Summary:
+- Total: 45 tests collected
+- Passed: 4
+- Failed: 2  
+- Errors: 39

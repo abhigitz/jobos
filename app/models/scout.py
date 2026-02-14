@@ -6,11 +6,12 @@ import uuid
 from datetime import date, datetime
 from typing import Any, Dict, List, Optional
 
-from sqlalchemy import Boolean, Date, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint, func, text
-from sqlalchemy.dialects.postgresql import ARRAY, JSONB, UUID
+from sqlalchemy import Boolean, Date, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint, func
+from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from .base import Base, IDMixin, TimestampMixin
+from .types import JSONBCompat, StringArray, UUIDArray
 
 
 class ScoutedJob(Base, IDMixin, TimestampMixin):
@@ -41,7 +42,7 @@ class ScoutedJob(Base, IDMixin, TimestampMixin):
     matched_company_id: Mapped[Optional[uuid.UUID]] = mapped_column(
         UUID(as_uuid=True), ForeignKey("companies.id", ondelete="SET NULL")
     )
-    raw_json: Mapped[Optional[Dict[str, Any]]] = mapped_column(JSONB)
+    raw_json: Mapped[Optional[Dict[str, Any]]] = mapped_column(JSONBCompat())
     search_query: Mapped[Optional[str]] = mapped_column(String(255))
 
     user_scouted_jobs: Mapped[list["UserScoutedJob"]] = relationship(
@@ -57,24 +58,20 @@ class UserScoutPreferences(Base, IDMixin, TimestampMixin):
     user_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, unique=True
     )
-    target_roles: Mapped[List[str]] = mapped_column(ARRAY(Text), default=list, server_default="{}")
-    role_keywords: Mapped[List[str]] = mapped_column(ARRAY(Text), default=list, server_default="{}")
-    target_locations: Mapped[List[str]] = mapped_column(ARRAY(Text), default=list, server_default="{}")
+    target_roles: Mapped[List[str]] = mapped_column(StringArray(), default=list)
+    role_keywords: Mapped[List[str]] = mapped_column(StringArray(), default=list)
+    target_locations: Mapped[List[str]] = mapped_column(StringArray(), default=list)
     location_flexibility: Mapped[str] = mapped_column(String(20), default="preferred")
-    target_company_ids: Mapped[List[uuid.UUID]] = mapped_column(
-        ARRAY(UUID(as_uuid=True)), default=list, server_default=text("'{}'::uuid[]")
-    )
-    excluded_company_ids: Mapped[List[uuid.UUID]] = mapped_column(
-        ARRAY(UUID(as_uuid=True)), default=list, server_default=text("'{}'::uuid[]")
-    )
-    target_industries: Mapped[List[str]] = mapped_column(ARRAY(Text), default=list, server_default="{}")
-    excluded_industries: Mapped[List[str]] = mapped_column(ARRAY(Text), default=list, server_default="{}")
-    company_stages: Mapped[List[str]] = mapped_column(ARRAY(Text), default=list, server_default="{}")
+    target_company_ids: Mapped[List[uuid.UUID]] = mapped_column(UUIDArray(), default=list)
+    excluded_company_ids: Mapped[List[uuid.UUID]] = mapped_column(UUIDArray(), default=list)
+    target_industries: Mapped[List[str]] = mapped_column(StringArray(), default=list)
+    excluded_industries: Mapped[List[str]] = mapped_column(StringArray(), default=list)
+    company_stages: Mapped[List[str]] = mapped_column(StringArray(), default=list)
     min_salary: Mapped[Optional[int]] = mapped_column(Integer)
     salary_flexibility: Mapped[str] = mapped_column(String(20), default="flexible")
     min_score: Mapped[int] = mapped_column(Integer, default=30)
-    learned_boosts: Mapped[Dict[str, Any]] = mapped_column(JSONB, default=dict, server_default="{}")
-    learned_penalties: Mapped[Dict[str, Any]] = mapped_column(JSONB, default=dict, server_default="{}")
+    learned_boosts: Mapped[Dict[str, Any]] = mapped_column(JSONBCompat(), default=dict)
+    learned_penalties: Mapped[Dict[str, Any]] = mapped_column(JSONBCompat(), default=dict)
     synced_from_profile_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
 
 
@@ -90,8 +87,8 @@ class UserScoutedJob(Base, IDMixin, TimestampMixin):
         UUID(as_uuid=True), ForeignKey("scouted_jobs.id", ondelete="CASCADE"), nullable=False
     )
     relevance_score: Mapped[int] = mapped_column(Integer, nullable=False)
-    score_breakdown: Mapped[Optional[Dict[str, Any]]] = mapped_column(JSONB)
-    match_reasons: Mapped[Optional[List[str]]] = mapped_column(ARRAY(Text))
+    score_breakdown: Mapped[Optional[Dict[str, Any]]] = mapped_column(JSONBCompat())
+    match_reasons: Mapped[Optional[List[str]]] = mapped_column(StringArray())
     status: Mapped[str] = mapped_column(String(20), default="new")
     matched_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     viewed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
@@ -121,6 +118,6 @@ class CompanyCareerSource(Base, IDMixin, TimestampMixin):
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     last_scraped_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
     scrape_frequency_hours: Mapped[int] = mapped_column(Integer, default=24)
-    scrape_config: Mapped[Optional[Dict[str, Any]]] = mapped_column(JSONB)
+    scrape_config: Mapped[Optional[Dict[str, Any]]] = mapped_column(JSONBCompat())
 
     __table_args__ = (UniqueConstraint("company_id", "source_type", name="uq_company_career_sources_company_source"),)

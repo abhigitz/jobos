@@ -331,6 +331,128 @@ RULES:
 
 
 @retry_on_failure(max_retries=3)
+async def generate_company_deep_research(
+    company_name: str, custom_questions: Optional[str] = None
+) -> Optional[dict]:
+    """
+    Generate comprehensive company research for VP/Head of Growth interview prep.
+    Returns structured JSON matching the Company Deep Research schema.
+    """
+    custom_section = ""
+    if custom_questions and custom_questions.strip():
+        custom_section = f"""
+CUSTOM QUESTIONS FROM USER (answer these in custom_answers.questions_answered):
+{custom_questions.strip()}
+"""
+
+    prompt = f"""You are an expert business analyst preparing a candidate for a VP/Head of Growth interview at {company_name}.
+
+Generate comprehensive, accurate research. Use real data where available. Focus on India context where relevant.
+Insights should be useful for a senior growth leader interview.
+
+{custom_section}
+
+Return ONLY valid JSON (no markdown, no backticks, no extra text). Structure:
+{{
+  "company": {{
+    "name": "string",
+    "tagline": "string",
+    "founded": "string or null",
+    "headquarters": "string or null",
+    "employees": "string or null",
+    "funding": "string or null",
+    "valuation": "string or null",
+    "ceo": "string or null",
+    "industry": "string or null"
+  }},
+  "overview": {{
+    "business_model": "string",
+    "key_metrics": ["metric1", "metric2"],
+    "recent_news": ["news1", "news2"],
+    "strategic_priorities": ["priority1", "priority2"]
+  }},
+  "competitors": [
+    {{
+      "name": "string",
+      "color": "#hex (e.g. #F59E0B)",
+      "tagline": "string",
+      "model": "string",
+      "revenue": "string",
+      "market_share": "string",
+      "strengths": ["s1", "s2"],
+      "weaknesses": ["w1", "w2"],
+      "threat_level": "string (e.g. Primary Rival, Direct Competitor)"
+    }}
+  ],
+  "positioning": {{
+    "competitive_advantages": ["adv1", "adv2"],
+    "market_position": "string",
+    "differentiation": "string"
+  }},
+  "user_personas": [
+    {{
+      "name": "string",
+      "emoji": "string (e.g. 👩‍💼)",
+      "age": "string",
+      "location": "string",
+      "income": "string",
+      "behavior": "string",
+      "goals": ["g1", "g2"],
+      "pain_points": ["p1", "p2"],
+      "platforms": "string"
+    }}
+  ],
+  "opportunities": {{
+    "market_gaps": ["gap1", "gap2"],
+    "growth_levers": ["lever1", "lever2"],
+    "threats": ["threat1", "threat2"],
+    "strategic_recommendations": ["rec1", "rec2"]
+  }},
+  "interview_prep": {{
+    "likely_questions": ["q1", "q2"],
+    "topics_to_research_further": ["topic1", "topic2"],
+    "talking_points": ["point1", "point2"],
+    "red_flags_to_avoid": ["flag1", "flag2"]
+  }},
+  "custom_answers": {{
+    "questions_answered": [{{"question": "string", "answer": "string"}}]
+  }},
+  "sources": ["source1", "source2"],
+  "generated_at": "ISO 8601 timestamp"
+}}
+
+RULES:
+- Use real, accurate data where available. If unknown, use null or empty arrays.
+- Focus on India context where relevant (e.g. Tier 2/3 cities, Indian market dynamics).
+- Insights must be useful for VP/Head of Growth interview.
+- Never use em dash. Use commas, periods, or hyphens.
+- Assign distinct hex colors to competitors (e.g. #F59E0B, #3B82F6, #10B981).
+- generated_at must be current ISO 8601 timestamp."""
+
+    result = await call_claude(prompt, max_tokens=8000, task_type="deep")
+    parsed = parse_json_response(result)
+
+    # Strip em dashes from string values (safety net)
+    if parsed:
+
+        def _clean(s: str) -> str:
+            return s.replace("\u2014", ", ").replace("\u2013", ", ")
+
+        def _clean_obj(obj: Any) -> Any:
+            if isinstance(obj, str):
+                return _clean(obj)
+            if isinstance(obj, dict):
+                return {k: _clean_obj(v) for k, v in obj.items()}
+            if isinstance(obj, list):
+                return [_clean_obj(x) for x in obj]
+            return obj
+
+        parsed = _clean_obj(parsed)
+
+    return parsed
+
+
+@retry_on_failure(max_retries=3)
 async def generate_morning_briefing(data: dict[str, Any]) -> Optional[str]:
     prompt = f"""Generate a morning briefing for a job seeker based on this data:
 

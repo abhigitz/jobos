@@ -1,6 +1,7 @@
 from .user import User, RefreshToken
 from .profile import ProfileDNA
 from .company import Company
+from .company_research import CompanyResearch
 from .job import Job
 from .contact import Contact
 from .content import ContentCalendar
@@ -26,6 +27,7 @@ __all__ = [
     "RefreshToken",
     "ProfileDNA",
     "Company",
+    "CompanyResearch",
     "Job",
     "Contact",
     "ContentCalendar",

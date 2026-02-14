@@ -208,6 +208,7 @@ from .routers import (  # noqa: E402
     interviews,
     jobs,
     profile,
+    research,
     resume,
     scout,
     search,
@@ -234,6 +235,7 @@ api_v1.include_router(briefings_user.router, prefix="/briefings", tags=["Briefin
 api_v1.include_router(content_studio.router)
 api_v1.include_router(daily_logs.router, prefix="/daily-logs", tags=["Daily Logs"])
 api_v1.include_router(interviews.router, prefix="/interviews", tags=["Interviews"])
+api_v1.include_router(research.router)
 api_v1.include_router(scout.router, prefix="/scout", tags=["Scout"])
 api_v1.include_router(search.router)
 

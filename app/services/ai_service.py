@@ -199,6 +199,10 @@ RULES:
 async def extract_profile(resume_text: str) -> Optional[dict]:
     prompt = f"""Extract a structured professional profile from this resume/text.
 
+RULES:
+- For dual degrees (e.g. B.Tech + M.Tech), create SEPARATE entries for each degree.
+- Do not combine multiple degrees into a single entry. Extract ALL education entries.
+
 TEXT:
 {resume_text}
 
@@ -212,7 +216,10 @@ Return ONLY valid JSON:
   "industries": ["industry1"],
   "achievements": [{{"company": "...", "description": "...", "metric": "..."}}],
   "resume_keywords": ["keyword1", "keyword2", ...],
-  "education": [{{"institution": "...", "degree": "...", "year": "..."}}],
+  "education": [
+    {{"institution": "IIT Delhi", "degree": "B.Tech", "year": "2012"}},
+    {{"institution": "IIT Delhi", "degree": "M.Tech", "year": "2012"}}
+  ],
   "alumni_networks": ["network1"],
   "career_narrative": "3-4 sentence career story",
   "experience_level": "Entry|Mid|Senior|Director|VP",

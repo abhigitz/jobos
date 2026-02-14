@@ -86,6 +86,8 @@ CRITICAL RULES:
 2. Always include metrics when numbers/percentages/amounts appear in the bullet
 3. Map each achievement to the company where it occurred
 4. For achievements without explicit metrics, use "N/A" for the metric field
+5. For dual degrees (e.g. B.Tech + M.Tech), create SEPARATE entries for each degree
+6. Do not combine multiple degrees into a single entry. Extract ALL education entries.
 
 Return ONLY valid JSON:
 {{
@@ -102,7 +104,10 @@ Return ONLY valid JSON:
         {{"company": "Company Name", "description": "Built data pipeline", "metric": "N/A"}}
     ],
     "resume_keywords": ["keyword1", "keyword2"],
-    "education": [{{"institution": "University", "degree": "Degree", "year": "2020"}}],
+    "education": [
+        {{"institution": "IIT Delhi", "degree": "B.Tech", "year": "2012"}},
+        {{"institution": "IIT Delhi", "degree": "M.Tech", "year": "2012"}}
+    ],
     "alumni_networks": ["Network1", "Network2"],
     "career_narrative": "3-4 sentence career story",
     "experience_level": "Entry|Mid|Senior|Director|VP",

@@ -10,6 +10,7 @@ class Settings(BaseSettings):
     jwt_secret_key: str
     jwt_refresh_secret_key: str
     anthropic_api_key: str = ""
+    openai_api_key: str = ""
     telegram_bot_token: str = ""
     telegram_webhook_secret: str = ""
     app_url: str = ""

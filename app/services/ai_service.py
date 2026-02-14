@@ -7,6 +7,7 @@ from typing import Any, Dict, List, Optional
 
 import anthropic
 from anthropic import AsyncAnthropic
+from openai import AsyncOpenAI
 from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
 
 from app.config import get_settings
@@ -16,6 +17,15 @@ from app.utils.json_parser import parse_json_response
 logger = logging.getLogger(__name__)
 
 client = AsyncAnthropic()
+openai_client: Optional[AsyncOpenAI] = None
+
+
+def _get_openai_client() -> AsyncOpenAI:
+    global openai_client
+    if openai_client is None:
+        settings = get_settings()
+        openai_client = AsyncOpenAI(api_key=settings.openai_api_key)
+    return openai_client
 
 
 def retry_on_failure(max_retries: int = 3, backoff_base: int = 2):
@@ -535,6 +545,62 @@ def _clean_em_dashes(obj: Any) -> Any:
     if isinstance(obj, list):
         return [_clean_em_dashes(x) for x in obj]
     return obj
+
+
+def _build_quick_research_prompt(company_name: str, custom_questions: Optional[str]) -> str:
+    """Build a concise prompt for quick research with GPT-4o-mini."""
+    custom_section = ""
+    if custom_questions:
+        questions = [q.strip() for q in custom_questions.strip().split("\n") if q.strip()]
+        if questions:
+            custom_section = "\nCUSTOM QUESTIONS TO ANSWER:\n" + "\n".join(f"- {q}" for q in questions)
+    return f"""You are a strategy consultant preparing a quick company briefing for a VP-level candidate interviewing at {company_name}.
+
+Provide a concise research summary. Use your knowledge (no web search). Return ONLY valid JSON, no markdown.
+
+Required sections:
+1. company: name, tagline, founded, headquarters, industry, ceo
+2. overview: timeline (2-3 sentences), business_model (2-3 sentences), key_metrics (array of {{label, value, growth}} for Revenue/GMV/MAU/Orders if known)
+3. competitors: array of 3-5 {{name, model, revenue, threat_level, strengths (2-3), weaknesses (2)}}
+4. interview_prep: likely_questions (5-8 with suggested_angle), talking_points (5+), red_flags_to_avoid (3-5)
+5. sources: array of 2-5 source names if you know them
+{custom_section}
+
+Structure the JSON with keys: company, overview, competitors, interview_prep, sources. Use null for unknown values. Never use em dashes (—)."""
+
+
+@retry_on_failure(max_retries=3)
+async def generate_company_quick_research(
+    company_name: str, custom_questions: Optional[str] = None
+) -> Optional[dict]:
+    """
+    Generate quick company research for interview prep using GPT-4o-mini.
+    No web search - uses model knowledge only. Returns structured JSON.
+    """
+    settings = get_settings()
+    if not settings.openai_api_key:
+        logger.warning("OpenAI API key not configured; quick research unavailable")
+        return None
+
+    prompt = _build_quick_research_prompt(company_name, custom_questions)
+    try:
+        response = await _get_openai_client().chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[{"role": "user", "content": prompt}],
+            max_tokens=4000,
+        )
+        content = response.choices[0].message.content if response.choices else ""
+        if not content:
+            raise AIServiceError("OpenAI returned empty response")
+    except Exception as e:
+        logger.exception("Quick research OpenAI call failed for %s: %s", company_name, e)
+        raise
+
+    parsed = parse_json_response(content)
+    if parsed:
+        return _clean_em_dashes(parsed)
+    logger.error("Quick research failed to parse JSON for %s. Preview: %s", company_name, content[:500])
+    return None
 
 
 @retry_on_failure(max_retries=3)

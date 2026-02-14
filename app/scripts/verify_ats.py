@@ -28,6 +28,12 @@ LEVER_COMPANIES: dict[str, str] = {
     "Meesho": "meesho",
     "Paytm": "paytm",
     "Zeta": "zeta",
+    "JioStar": "jiostar",
+    "Hevo Data": "hevodata",
+    "FamPay": "fampay",
+    "Stable Money": "stable-money1",
+    "Extreme Networks": "extremenetworks",
+    "Actian": "actian",
 }
 
 logging.basicConfig(level=logging.INFO)

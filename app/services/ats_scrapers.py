@@ -34,6 +34,12 @@ LEVER_COMPANIES: dict[str, str] = {
     "Meesho": "meesho",
     "Paytm": "paytm",
     "Zeta": "zeta",
+    "JioStar": "jiostar",
+    "Hevo Data": "hevodata",
+    "FamPay": "fampay",
+    "Stable Money": "stable-money1",
+    "Extreme Networks": "extremenetworks",
+    "Actian": "actian",
 }
 
 # Slug -> display name for special cases
@@ -42,6 +48,12 @@ COMPANY_SLUG_TO_NAME: dict[str, str] = {
     "razorpaysoftwareprivatelimited": "Razorpay",
     "cred": "CRED",
     "meesho": "Meesho",
+    "jiostar": "JioStar",
+    "hevodata": "Hevo Data",
+    "fampay": "FamPay",
+    "stable-money1": "Stable Money",
+    "extremenetworks": "Extreme Networks",
+    "actian": "Actian",
 }
 
 

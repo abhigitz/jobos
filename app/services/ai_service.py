@@ -547,54 +547,114 @@ def _clean_em_dashes(obj: Any) -> Any:
     return obj
 
 
-def _build_quick_research_prompt(company_name: str, custom_questions: Optional[str]) -> str:
-    """Build a concise prompt for quick research with GPT-4o-mini."""
-    custom_section = ""
-    if custom_questions:
-        questions = [q.strip() for q in custom_questions.strip().split("\n") if q.strip()]
-        if questions:
-            custom_section = "\nCUSTOM QUESTIONS TO ANSWER:\n" + "\n".join(f"- {q}" for q in questions)
-    return f"""You are a strategy consultant preparing a quick company briefing for a VP-level candidate interviewing at {company_name}.
-
-Provide a concise research summary. Use your knowledge (no web search). Return ONLY valid JSON, no markdown.
-
-Required sections:
-1. company: name, tagline, founded, headquarters, industry, ceo
-2. overview: timeline (2-3 sentences), business_model (2-3 sentences), key_metrics (array of {{label, value, growth}} for Revenue/GMV/MAU/Orders if known)
-3. competitors: array of 3-5 {{name, model, revenue, threat_level, strengths (2-3), weaknesses (2)}}
-4. interview_prep: likely_questions (5-8 with suggested_angle), talking_points (5+), red_flags_to_avoid (3-5)
-5. sources: array of 2-5 source names if you know them
-{custom_section}
-
-Structure the JSON with keys: company, overview, competitors, interview_prep, sources. Use null for unknown values. Never use em dashes (—)."""
-
-
 @retry_on_failure(max_retries=3)
 async def generate_company_quick_research(
     company_name: str, custom_questions: Optional[str] = None
 ) -> Optional[dict]:
     """
-    Generate quick company research for interview prep using GPT-4o-mini.
+    Fast, cheap research using Claude Haiku.
     No web search - uses model knowledge only. Returns structured JSON.
     """
-    settings = get_settings()
-    if not settings.openai_api_key:
-        logger.warning("OpenAI API key not configured; quick research unavailable")
-        return None
+    prompt = f"""Generate a company research summary for {company_name}.
 
-    prompt = _build_quick_research_prompt(company_name, custom_questions)
+Return ONLY valid JSON (no markdown, no code fences) with this structure:
+{{
+  "company": {{
+    "name": "{company_name}",
+    "tagline": "One-line description",
+    "founded": "Year",
+    "headquarters": "City, Country",
+    "employees": "Count",
+    "funding": "Total raised",
+    "valuation": "Latest valuation",
+    "ceo": "CEO Name",
+    "industry": "Industry"
+  }},
+  "overview": {{
+    "business_model": "2-3 sentence description of how they make money",
+    "key_metrics": [
+      {{"label": "Revenue", "value": "₹X Cr", "growth": "+X% YoY", "context": "FY24"}},
+      {{"label": "Users", "value": "XM+", "growth": "+X%", "context": "MAU"}},
+      {{"label": "GMV", "value": "$XB", "growth": "+X%", "context": "Annual"}}
+    ],
+    "recent_news": [
+      {{"headline": "Recent news headline", "date": "Month Year", "impact": "Positive"}}
+    ],
+    "strategic_priorities": ["Priority 1", "Priority 2", "Priority 3"]
+  }},
+  "competitors": [
+    {{
+      "name": "Competitor Name",
+      "color": "#3B82F6",
+      "tagline": "Their positioning",
+      "model": "Business model",
+      "revenue": "Revenue figure",
+      "market_share": "X%",
+      "strengths": ["Strength 1", "Strength 2", "Strength 3"],
+      "weaknesses": ["Weakness 1", "Weakness 2"],
+      "threat_level": "High"
+    }}
+  ],
+  "positioning": {{
+    "competitive_advantages": ["Advantage 1", "Advantage 2", "Advantage 3"],
+    "market_position": "Description of market position",
+    "differentiation": "What makes them unique"
+  }},
+  "user_personas": [
+    {{
+      "name": "Persona Name",
+      "emoji": "👤",
+      "age": "25-35",
+      "location": "Location type",
+      "income": "Income range",
+      "behavior": "Key behaviors",
+      "goals": ["Goal 1", "Goal 2"],
+      "pain_points": ["Pain 1", "Pain 2"],
+      "platforms": "Where they engage"
+    }}
+  ],
+  "opportunities": {{
+    "market_gaps": [{{"gap": "Gap description", "opportunity": "How to exploit", "difficulty": "Medium"}}],
+    "growth_levers": ["Lever 1", "Lever 2"],
+    "threats": ["Threat 1", "Threat 2"],
+    "strategic_recommendations": ["Recommendation 1", "Recommendation 2"]
+  }},
+  "interview_prep": {{
+    "likely_questions": [
+      {{"question": "Interview question?", "suggested_angle": "How to approach"}}
+    ],
+    "talking_points": ["Point 1", "Point 2"],
+    "red_flags_to_avoid": ["Avoid 1", "Avoid 2"],
+    "topics_to_research_further": ["Topic 1", "Topic 2"]
+  }},
+  "custom_answers": {{"questions_answered": []}},
+  "sources": ["AI Analysis based on training data"],
+  "generated_at": "{datetime.utcnow().isoformat()}",
+  "research_type": "quick"
+}}
+
+Include 3 competitors and 2 user personas. Be concise but accurate.
+{f"Also briefly answer: {custom_questions}" if custom_questions else ""}
+
+Return ONLY the JSON object, nothing else."""
+
     try:
-        response = await _get_openai_client().chat.completions.create(
-            model="gpt-4o-mini",
+        response = await client.messages.create(
+            model="claude-haiku-4-20250514",
+            max_tokens=2500,
             messages=[{"role": "user", "content": prompt}],
-            max_tokens=4000,
         )
-        content = response.choices[0].message.content if response.choices else ""
-        if not content:
-            raise AIServiceError("OpenAI returned empty response")
+        content = response.content[0].text
     except Exception as e:
-        logger.exception("Quick research OpenAI call failed for %s: %s", company_name, e)
+        logger.exception("Quick research Claude Haiku call failed for %s: %s", company_name, e)
         raise
+
+    # Clean up any markdown formatting
+    if "```" in content:
+        content = content.split("```")[1]
+        if content.startswith("json"):
+            content = content[4:]
+    content = content.strip()
 
     parsed = parse_json_response(content)
     if parsed:

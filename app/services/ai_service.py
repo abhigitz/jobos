@@ -331,135 +331,263 @@ RULES:
     return parsed
 
 
-@retry_on_failure(max_retries=3)
-async def generate_company_deep_research(
-    company_name: str, custom_questions: Optional[str] = None
-) -> Optional[dict]:
-    """
-    Generate comprehensive company research for VP/Head of Growth interview prep.
-    Returns structured JSON matching the Company Deep Research schema.
-    """
-    prompt = f"""You are a senior strategy consultant. Generate a company intelligence report for interview preparation.
+def _build_company_research_prompt(company_name: str, custom_questions: Optional[str]) -> str:
+    """Build the comprehensive research prompt."""
+    custom_section = ""
+    if custom_questions:
+        custom_section = f"""
+CUSTOM QUESTIONS TO ANSWER IN DETAIL:
+{custom_questions}
 
-Company: {company_name}
+For EACH custom question above, provide a thorough 200-300 word answer with specific data points, numbers, and sources where relevant. Include in custom_answers.questions_answered as objects with "question" and "answer" keys.
+"""
+    return f"""You are a senior strategy consultant at McKinsey preparing a comprehensive company intelligence briefing for a VP-level candidate interviewing at {company_name}.
 
-Return ONLY valid JSON matching this EXACT structure (no markdown, no code fences):
+This is NOT a surface-level summary. This is a deep-dive that MUST include:
+- Specific numbers and metrics with sources
+- Current data (USE WEB SEARCH to gather latest financials, news, filings, DRHP)
+- Nuanced competitive analysis
+- Actionable interview insights
+
+STEP 1: Use the web_search tool to gather current data on {company_name} - financials, recent news, IPO/DRHP if applicable, competitor updates, leadership changes.
+STEP 2: Synthesize all gathered data into the structured JSON below.
+
+REQUIREMENTS BY SECTION:
+
+1. COMPANY OVERVIEW (overview + company):
+   - Full company timeline: founding year, key milestones (funding rounds, product launches, pivots), current state
+   - Latest financials with SPECIFIC numbers: Revenue, GMV, MAU, Orders (use web search for FY24/FY25 data)
+   - IPO/DRHP data if applicable (filing status, key metrics from DRHP)
+   - Org structure and business verticals
+   - Monetization breakdown with P&L contribution percentages where known
+
+2. COMPETITORS (minimum 5-6 competitors):
+   - Revenue comparison, market share, threat level for each
+   - At least 5 specific strengths and 3 specific weaknesses per competitor
+   - Unique hex color code for each competitor (e.g. #3B82F6, #10B981)
+
+3. USER PERSONAS (minimum 4 distinct personas):
+   - Include: buyer, seller, reseller, first-time user (or equivalent for the business model)
+   - Detailed demographics, behaviors, goals, pain points for each
+   - Platform usage patterns
+
+4. OPPORTUNITIES:
+   - At least 5 market gaps with specific opportunity descriptions
+   - Growth levers with implementation details
+   - Competitive threats with mitigation strategies
+   - At least 5 strategic recommendations
+
+5. INTERVIEW PREP:
+   - 8-10 likely questions with detailed suggested angles
+   - Talking points with supporting data
+   - At least 5 red flags to avoid
+   - At least 5 topics for further research
+{custom_section}
+
+Return ONLY valid JSON matching this EXACT structure (no markdown, no code fences, no preamble):
 
 {{
   "company": {{
     "name": "{company_name}",
     "tagline": "One-line value proposition",
-    "founded": "2015",
-    "headquarters": "Bangalore, India",
-    "employees": "5000+",
-    "funding": "$500M total raised",
-    "valuation": "$5B (2024)",
+    "founded": "YYYY",
+    "headquarters": "City, Country",
+    "employees": "X+",
+    "funding": "Total raised",
+    "valuation": "Current valuation with year",
     "ceo": "CEO Name",
-    "industry": "E-commerce"
+    "industry": "Industry"
   }},
   "overview": {{
-    "business_model": "Detailed 2-3 sentence explanation of how the company makes money",
+    "timeline": "Full timeline from founding to present with key milestones",
+    "business_model": "Detailed explanation of how the company makes money",
     "key_metrics": [
-      {{"label": "Revenue", "value": "₹5,000 Cr", "growth": "+45% YoY", "context": "FY24"}},
-      {{"label": "Users", "value": "150M+", "growth": "+30% YoY", "context": "Monthly active"}},
-      {{"label": "GMV", "value": "$5B", "growth": "+25% YoY", "context": "Annual"}},
-      {{"label": "Market Share", "value": "28%", "growth": "+3%", "context": "In social commerce"}}
+      {{"label": "Revenue", "value": "specific number", "growth": "YoY", "context": "FY24/FY25"}},
+      {{"label": "GMV", "value": "specific number", "growth": "YoY", "context": "Annual"}},
+      {{"label": "MAU/Users", "value": "specific number", "growth": "YoY", "context": "Monthly"}},
+      {{"label": "Orders", "value": "specific number", "growth": "YoY", "context": "Annual"}}
     ],
+    "ipo_drhp": "IPO/DRHP status and key data if applicable, else null",
+    "org_structure": "Business verticals and org structure",
+    "monetization_breakdown": "P&L contribution by segment with percentages",
     "recent_news": [
-      {{"headline": "Recent development headline", "date": "Jan 2025", "impact": "Positive"}},
-      {{"headline": "Another recent news item", "date": "Dec 2024", "impact": "Neutral"}}
+      {{"headline": "Recent development", "date": "Month YYYY", "impact": "Positive|Negative|Neutral"}}
     ],
     "strategic_priorities": ["Priority 1", "Priority 2", "Priority 3"]
   }},
   "competitors": [
     {{
       "name": "Competitor Name",
-      "color": "#3B82F6",
-      "tagline": "Their positioning",
-      "model": "Business model summary",
-      "revenue": "₹10,000 Cr",
-      "market_share": "35%",
-      "strengths": ["Strength 1", "Strength 2", "Strength 3"],
-      "weaknesses": ["Weakness 1", "Weakness 2"],
-      "threat_level": "High"
+      "color": "#HEXCODE",
+      "tagline": "Positioning",
+      "model": "Business model",
+      "revenue": "Revenue figure",
+      "market_share": "X%",
+      "strengths": ["5+ specific strengths"],
+      "weaknesses": ["3+ specific weaknesses"],
+      "threat_level": "High|Medium|Low"
     }}
   ],
   "positioning": {{
     "competitive_advantages": ["Advantage 1", "Advantage 2", "Advantage 3"],
-    "market_position": "2-3 sentence description of market position",
-    "differentiation": "What makes them unique vs competitors"
+    "market_position": "2-3 sentence description",
+    "differentiation": "What makes them unique"
   }},
   "user_personas": [
     {{
-      "name": "Persona Name - The Descriptor",
-      "emoji": "👩‍💼",
-      "age": "25-35",
-      "location": "Tier 2/3 cities",
-      "income": "₹20K-40K/month",
-      "behavior": "Key behavioral traits",
+      "name": "Persona - Descriptor",
+      "emoji": "emoji",
+      "age": "age range",
+      "location": "geography",
+      "income": "income range",
+      "behavior": "Key behaviors",
       "goals": ["Goal 1", "Goal 2"],
-      "pain_points": ["Pain point 1", "Pain point 2"],
-      "platforms": "Where they shop/engage"
+      "pain_points": ["Pain 1", "Pain 2"],
+      "platforms": "Where they engage"
     }}
   ],
   "opportunities": {{
     "market_gaps": [
-      {{"gap": "Gap description", "opportunity": "How to exploit", "difficulty": "Medium"}}
+      {{"gap": "Gap", "opportunity": "How to exploit", "difficulty": "High|Medium|Low"}}
     ],
-    "growth_levers": ["Lever 1", "Lever 2", "Lever 3"],
+    "growth_levers": ["Lever with implementation detail"],
     "threats": ["Threat 1", "Threat 2"],
-    "strategic_recommendations": ["Recommendation 1", "Recommendation 2"]
+    "competitive_threats": [
+      {{"threat": "Threat", "mitigation": "Strategy"}}
+    ],
+    "strategic_recommendations": ["5+ recommendations"]
   }},
   "interview_prep": {{
     "likely_questions": [
-      {{"question": "Likely interview question?", "suggested_angle": "How to approach this"}},
-      {{"question": "Another question?", "suggested_angle": "Suggested framing"}}
+      {{"question": "Question?", "suggested_angle": "Detailed approach with data"}}
     ],
-    "topics_to_research_further": ["Topic 1", "Topic 2"],
-    "talking_points": ["Point 1", "Point 2", "Point 3"],
-    "red_flags_to_avoid": ["Don't mention X", "Avoid topic Y"]
+    "talking_points": ["Point with supporting data"],
+    "red_flags_to_avoid": ["5+ items"],
+    "topics_to_research_further": ["5+ topics"]
   }},
   "custom_answers": {{
-    "questions_answered": []
+    "questions_answered": [
+      {{"question": "Custom Q", "answer": "200-300 word detailed answer with data"}}
+    ]
   }},
   "sources": ["Source 1", "Source 2"],
   "generated_at": "{datetime.utcnow().isoformat()}"
 }}
 
-{f"Also answer these custom questions and include them in custom_answers.questions_answered as objects with 'question' and 'answer' keys: {custom_questions}" if custom_questions else ""}
+CRITICAL RULES:
+- Return ONLY the JSON object. No markdown, no ```json, no explanation before or after.
+- Use web search to get CURRENT data. Do not rely on training data for financials or recent news.
+- For India companies, use ₹ for currency.
+- threat_level, difficulty: "High", "Medium", or "Low"
+- impact: "Positive", "Negative", or "Neutral"
+- Never use em dashes (—). Use commas, periods, or hyphens instead."""
 
-CRITICAL:
-- Return ONLY the JSON object, no markdown formatting
-- key_metrics MUST be array of objects with label/value/growth/context keys
-- recent_news MUST be array of objects with headline/date/impact keys
-- Use real data for {company_name} where available
-- For India companies, use ₹ for currency
-- threat_level must be "High", "Medium", or "Low"
-- difficulty must be "High", "Medium", or "Low"
-- impact must be "Positive", "Negative", or "Neutral"
-"""
 
-    result = await call_claude(prompt, max_tokens=8000, task_type="deep")
-    parsed = parse_json_response(result)
+async def _call_claude_with_web_search(prompt: str, max_tokens: int = 8000) -> str:
+    """
+    Call Claude with web search tool enabled for real-time data.
+    Uses messages.create with web_search_20250305 server tool.
+    """
+    settings = get_settings()
+    model = settings.ai_model_deep
+    web_search_tool: Dict[str, Any] = {
+        "type": "web_search_20250305",
+        "name": "web_search",
+        "max_uses": 8,
+    }
+    try:
+        message = await client.messages.create(
+            model=model,
+            max_tokens=max_tokens,
+            messages=[{"role": "user", "content": prompt}],
+            tools=[web_search_tool],
+            tool_choice={"type": "auto"},
+        )
+    except anthropic.BadRequestError as e:
+        if "web_search" in str(e).lower() or "tool" in str(e).lower():
+            logger.warning("Web search tool not available, falling back to standard completion: %s", e)
+            return await call_claude(prompt, max_tokens=max_tokens, task_type="deep")
+        raise
 
-    # Strip em dashes from string values (safety net)
-    if parsed:
+    if not message.content or len(message.content) == 0:
+        raise AIServiceError("Claude returned empty response")
 
-        def _clean(s: str) -> str:
-            return s.replace("\u2014", ", ").replace("\u2013", ", ")
+    text_parts: List[str] = []
+    for block in message.content:
+        if hasattr(block, "text") and block.text:
+            text_parts.append(block.text)
+        elif getattr(block, "type", None) == "tool_use":
+            logger.info("Model requested tool_use (web search); server handles execution")
+            continue
 
-        def _clean_obj(obj: Any) -> Any:
-            if isinstance(obj, str):
-                return _clean(obj)
-            if isinstance(obj, dict):
-                return {k: _clean_obj(v) for k, v in obj.items()}
-            if isinstance(obj, list):
-                return [_clean_obj(x) for x in obj]
-            return obj
+    result = "".join(text_parts)
+    if not result:
+        raise AIServiceError("Claude response contained no text content")
+    return result
 
-        parsed = _clean_obj(parsed)
 
-    return parsed
+def _clean_em_dashes(obj: Any) -> Any:
+    """Recursively strip em dashes from string values."""
+    if isinstance(obj, str):
+        return obj.replace("\u2014", ", ").replace("\u2013", ", ")
+    if isinstance(obj, dict):
+        return {k: _clean_em_dashes(v) for k, v in obj.items()}
+    if isinstance(obj, list):
+        return [_clean_em_dashes(x) for x in obj]
+    return obj
+
+
+@retry_on_failure(max_retries=3)
+async def generate_company_deep_research(
+    company_name: str, custom_questions: Optional[str] = None
+) -> Optional[dict]:
+    """
+    Generate comprehensive company research for VP/Head of Growth interview prep.
+    Uses Claude with web search for real-time financials, news, DRHP data.
+    Returns structured JSON matching the Company Deep Research schema.
+    """
+    prompt = _build_company_research_prompt(company_name, custom_questions)
+
+    max_parse_retries = 2
+    last_result: str = ""
+
+    for parse_attempt in range(max_parse_retries + 1):
+        try:
+            result = await _call_claude_with_web_search(prompt, max_tokens=8000)
+        except Exception as e:
+            logger.exception("Company research AI call failed for %s: %s", company_name, e)
+            raise
+
+        last_result = result
+        logger.info(
+            "Company research AI response for %s (attempt %d): length=%d, preview=%s",
+            company_name,
+            parse_attempt + 1,
+            len(result),
+            result[:500] if result else "",
+        )
+
+        parsed = parse_json_response(result)
+
+        if parsed:
+            parsed = _clean_em_dashes(parsed)
+            return parsed
+
+        if parse_attempt < max_parse_retries:
+            logger.warning(
+                "JSON parse failed for %s, retrying with stricter instructions (attempt %d)",
+                company_name,
+                parse_attempt + 1,
+            )
+            prompt = prompt + "\n\nRETRY: Your previous response was not valid JSON. Return ONLY a single valid JSON object. No markdown, no code blocks, no extra text. Ensure all strings are properly escaped."
+
+    logger.error(
+        "Company research failed to parse JSON after %d attempts for %s. Response preview: %s",
+        max_parse_retries + 1,
+        company_name,
+        last_result[:1000] if last_result else "N/A",
+    )
+    return None
 
 
 @retry_on_failure(max_retries=3)
